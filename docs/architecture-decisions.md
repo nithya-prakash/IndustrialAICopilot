@@ -376,3 +376,56 @@ points at the resource by ID and lets the caller join to the current
 record for the rest, which is also why it stayed a lightweight `resource_
 type`/`resource_id` pair rather than per-resource-type foreign keys.
 
+## Phase 8
+
+### Why hand-rolled CSS (custom properties + utility classes) instead of Tailwind or a component library (MUI, Chakra, etc.)?
+A UI framework would be faster to assemble but hides the actual CSS from
+an interviewer skimming the repo, and this project's differentiator is the
+backend/AI engineering, not frontend polish. A small design-system file
+(`src/index.css`: color/spacing/radius tokens as CSS variables, a handful
+of reusable classes — `.card`, `.btn`, `.badge`, `.field`) gets a
+consistent, professional look with zero dependencies and full visibility
+into every rule, which matters more here than component-library velocity.
+
+### Why React Context for auth state instead of Redux/Zustand?
+The frontend has exactly one piece of genuinely global state — the
+logged-in user and their token — everything else (documents, diagnoses,
+approvals) is server state fetched per-page with plain `useState`/
+`useEffect`, not client state that needs a store. A single `AuthContext`
+(`src/context/AuthContext.tsx`) covers the actual need; reaching for Redux
+here would be state-management machinery with nothing non-trivial to
+manage.
+
+### Why is role-based UI gating duplicated client-side when the backend already enforces RBAC?
+Hiding nav links and blocking direct navigation (`RequireRole`) for a
+technician on `/approvals` or `/audit-log` is a UX courtesy — it stops a
+user from clicking into a page that will just 403 — not a security
+boundary. The backend's `require_roles` (Phase 1/7) is the actual
+enforcement, verified independently by the existing 201 backend tests;
+the frontend check is defense in depth, live-verified this phase by
+confirming a technician session gets both the hidden nav item and a
+redirect on direct navigation, while the underlying API call still
+correctly 403s regardless of what the UI shows.
+
+### Why does the Docker-built frontend get `VITE_API_BASE_URL=http://localhost:8000` baked in at build time, not proxied through nginx to the `backend` service?
+Vite env vars are resolved at build time into the static JS bundle, and
+the code that calls the API runs in the user's browser, not inside the
+frontend container — so the URL has to be one the *browser* can reach
+(`localhost:8000`, published on the host), not the Docker-internal
+service name (`http://backend:8000`, which only resolves on the compose
+network). This is the same "browser vs. container network" distinction
+that shaped the Phase 1 CORS setup; live-verified by confirming an actual
+cross-origin login request from the Docker-served frontend (origin
+`http://localhost:3002`) reaches the backend and gets a real (401)
+response, not a CORS or DNS failure.
+
+### Why a separate `docker-compose.yml` port for the frontend (3002) instead of the conventional 3000?
+Ports 3000 and 3001 on this machine were already bound by containers from
+another portfolio project running concurrently — a genuine, mundane
+multi-project workspace conflict, not a design decision. Remapped to
+`3002:3000` (container still listens on 3000 internally) and
+`CORS_ORIGINS` updated to match; the general lesson (check `lsof`, pick a
+free host port, keep `CORS_ORIGINS` in sync in both `.env` and
+`.env.example`) is the same remediation used for every port conflict
+across this project's earlier phases, not new to this one.
+

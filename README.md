@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 7 (Human Approval) complete.** This README will grow
+**Status: Phase 8 (Frontend) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -30,6 +30,9 @@ for design rationale on the choices below.
   citation validation across all evidence types
 - **Human-in-the-loop**: role-gated supervisor approve/reject workflow,
   append-only audit log
+- **Frontend**: React 19 + Vite + TypeScript, hand-rolled CSS design
+  system, role-aware SPA (Dashboard, Knowledge Base, AI Copilot, Evidence
+  panel, Approval Dashboard, Audit Log)
 - **Infra**: Docker Compose, structured logging (structlog)
 
 ## Local setup
@@ -157,6 +160,32 @@ A decision, once made, can't be re-decided (`409` on a second attempt) —
 disagreements go through a fresh question, not mutated history. Admins can
 review the full audit trail: `GET /api/v1/audit-logs`.
 
+## Try the frontend
+
+```bash
+docker compose up --build frontend
+```
+
+Open http://localhost:3002 — register (or log in), then:
+
+- **Dashboard** — diagnosis/document/approval stats at a glance
+- **Knowledge Base** — upload a manual, watch its status poll live through
+  the ingestion pipeline
+- **AI Copilot** — ask a question, optionally attach a component photo and
+  current sensor readings, get back a structured, cited diagnosis
+- **Approvals** (supervisor/admin) — approve/reject diagnoses flagged
+  `requires_human_approval`
+- **Audit Log** (admin) — the full compliance event trail
+
+Role-based UI gating (nav items hidden, routes redirect) mirrors the
+backend's RBAC — the frontend check is a UX courtesy, the backend
+`require_roles` check is the real enforcement (see ADR). For local frontend
+development with hot reload instead of the Docker build:
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
 ## Implemented so far
 
 **Phase 1 — Foundation**
@@ -279,9 +308,36 @@ review the full audit trail: `GET /api/v1/audit-logs`.
   `409`, admin sees the approval event in the audit log, diagnosis drops
   out of the pending-approval list once decided
 
+**Phase 8 — Frontend**
+- React 19 + Vite + TypeScript SPA (`frontend/`), hand-rolled CSS design
+  system (`src/index.css`) — no UI framework dependency (see ADR)
+- Typed API client layer (`src/api/`) mirroring every backend Pydantic
+  schema, JWT persisted client-side, `ApiError` surfaces real backend
+  error details rather than a generic failure message
+- Auth via React Context (`AuthContext`) — the one genuinely global piece
+  of client state; everything else is server state fetched per-page
+- Role-based UI gating (nav hidden + route-level `RequireRole` guards) for
+  technician/supervisor/admin, layered on top of (not replacing) the
+  backend's own RBAC enforcement — live-verified that a technician gets
+  both the hidden nav item and a redirect, while the API still 403s
+  independent of the UI
+- Pages: Dashboard, Knowledge Base (upload + live-polling status), AI
+  Copilot (question + optional image/sensor evidence), Evidence panel
+  (integrated into the diagnosis view), Approval Dashboard, Diagnosis
+  Detail, Audit Log, Login/Register
+- Dockerized (multi-stage `node:20-alpine` build → `nginx:1.27-alpine`
+  static serve), `VITE_API_BASE_URL` baked in at build time to the
+  host-reachable backend URL, not the Docker-internal service name (see
+  ADR)
+- Live-verified in-browser across all pages/roles/flows (register, login,
+  upload, query, approve, reject, navigate) with zero console errors,
+  including the Dockerized build served on its own port with a real
+  cross-origin request to the backend (no CORS failure, no mocked
+  response)
+
 ## Not yet implemented
 
-The frontend (Phase 8) is next. See the phase plan in the project brief
+Observability (Phase 9) is next. See the phase plan in the project brief
 for the full roadmap.
 
 ## Known limitations
