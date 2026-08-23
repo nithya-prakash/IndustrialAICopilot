@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 10 (Evaluation) complete.** This README will grow
+**Status: Phase 11 (CI/CD) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -476,10 +476,39 @@ interval.
   script written and discarded specifically for this verification, not
   left in the codebase as a testing backdoor
 
+**Phase 11 — CI/CD**
+- GitHub Actions workflow (`.github/workflows/ci.yml`), three parallel
+  jobs on every push/PR to `main`:
+  - **backend** — ruff + pytest (same suite as local `make test`), with
+    the same `tesseract-ocr`/`poppler-utils` system packages the
+    Dockerfile installs, since `app/ingestion/ocr.py`'s tests exercise
+    real binaries, not mocks
+  - **frontend** — `npm run lint` + `npm run build` (tsc + vite), plus a
+    `docker build` of the frontend image so a broken multi-stage
+    Dockerfile fails CI, not just a future `docker compose up`
+  - **compose-smoke-test** — builds the real backend image and brings up
+    `backend` + `worker` against real Postgres/Qdrant/Redis through
+    docker-compose's own health-check chain, then round-trips a real
+    register → JWT → authenticated `/me` request — the CI equivalent of
+    the manual `curl` verification this project has run by hand after
+    every phase so far
+- This project had no git history before this phase — ten phases of
+  Docker-verified work existed only on disk. Reconstructed as one commit
+  per phase (see ADR) using this project's own phase-by-phase
+  documentation as the record of what changed when, so CI has real
+  history to run against
+- Not live-verified against an actual GitHub Actions run in this
+  environment — no `gh` CLI auth and no existing remote here, and
+  creating a repo + pushing is exactly the kind of external-consequence
+  action this project's operating rules require the user to authorize
+  and perform themselves (see ADR). Every path/script the workflow
+  references was cross-checked against the real route definitions and
+  `package.json`, and its YAML was syntax-validated — what's unverified
+  is specifically whether it goes green on GitHub
+
 ## Not yet implemented
 
-CI/CD (Phase 11) is next. See the phase plan in the project brief for
-the full roadmap.
+Final polish (Phase 12) is next — the last phase in the original roadmap.
 
 ## Known limitations
 
@@ -524,3 +553,9 @@ the full roadmap.
   Deliberately doesn't attempt an LLM-as-judge quality score even with a
   key available — see ADR for why that's a scoping choice, not a gap to
   fill later.
+- CI (`.github/workflows/ci.yml`) has not run against a real GitHub
+  Actions execution in this environment — no GitHub remote existed here
+  to push to. Built and cross-checked as rigorously as everything else
+  (every path/script it references verified against the real code, YAML
+  syntax-validated), but "does it actually go green on GitHub" is
+  unverified until pushed — see ADR.
