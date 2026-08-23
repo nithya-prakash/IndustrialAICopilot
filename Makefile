@@ -1,4 +1,4 @@
-.PHONY: up down build logs test lint migrate revision shell eval
+.PHONY: up down build logs test lint migrate revision shell eval eval-diagnosis
 
 up:
 	docker compose up --build
@@ -29,3 +29,6 @@ shell:
 
 eval:
 	docker compose run --rm backend python -m evaluation.run
+
+eval-diagnosis:
+	docker compose run --rm backend python -m evaluation.diagnosis_eval

@@ -1,0 +1,57 @@
+[
+  {
+    "id": "motor_vibration",
+    "question": "MOTOR-001 has been vibrating a lot more than usual lately — what's going on?",
+    "equipment_id": "MOTOR-001",
+    "equipment_type": "electric_motor",
+    "required_tools": ["query_sensor_history"],
+    "optional_tools": ["search_technical_documents", "get_maintenance_schedule"],
+    "expected_evidence_types": ["sensor_reading"],
+    "min_severity": "medium",
+    "notes": "data/sensors/motor_001.csv (seeded via scripts/seed_sensor_data.py) has 5 injected vibration spikes crossing the sample manual's documented 4.5 mm/s RMS guidance. query_sensor_history's anomaly detection catches all 5 (confirmed live in Phase 5), which deterministically forces normalize_severity's escalation floor to at least 'medium' (Phase 6) regardless of what the model itself would have said — that's what min_severity checks here, not a subjective judgment about the right answer."
+  },
+  {
+    "id": "motor_overheating_docs",
+    "question": "Is overheating a known issue on this type of motor? What does the manual say to check?",
+    "equipment_id": "MOTOR-001",
+    "equipment_type": "electric_motor",
+    "required_tools": ["search_technical_documents"],
+    "optional_tools": ["query_sensor_history"],
+    "expected_evidence_types": ["document_chunk"],
+    "min_severity": null,
+    "notes": "The synthetic sample manual (scripts/generate_sample_manual.py) has a Troubleshooting > Overheating section — a question phrased around documentation should retrieve it."
+  },
+  {
+    "id": "conveyor_maintenance_overdue",
+    "question": "Is CONVEYOR-001 due for any maintenance right now?",
+    "equipment_id": "CONVEYOR-001",
+    "equipment_type": "conveyor_system",
+    "required_tools": ["get_maintenance_schedule"],
+    "optional_tools": [],
+    "expected_evidence_types": ["maintenance_record"],
+    "min_severity": null,
+    "notes": "scripts/seed_equipment_data.py seeds a 'Motor current check' task (45-day interval, last performed 50 days ago) — deliberately overdue."
+  },
+  {
+    "id": "pump_no_strong_evidence",
+    "question": "Any concerns with PUMP-001's seals based on its maintenance history?",
+    "equipment_id": "PUMP-001",
+    "equipment_type": "industrial_pump",
+    "required_tools": ["get_maintenance_schedule"],
+    "optional_tools": ["query_sensor_history"],
+    "expected_evidence_types": ["maintenance_record"],
+    "min_severity": null,
+    "notes": "PUMP-001's seeded tasks (seal inspection, impeller check) are both within interval, not overdue — a well-behaved run should reflect 'nothing overdue' rather than inventing a concern. This harness only measures whether get_maintenance_schedule was called and returned maintenance_record evidence, not whether the summary avoided fabrication (that would need a judge call this environment can't make without an API key) — see evaluation/diagnosis_eval.py docstring."
+  },
+  {
+    "id": "motor_vibration_with_manual_threshold",
+    "question": "MOTOR-001's vibration sensor read 13.5 mm/s RMS this morning — is that within the documented limit, and by how much is it over if not?",
+    "equipment_id": "MOTOR-001",
+    "equipment_type": "electric_motor",
+    "required_tools": ["search_technical_documents"],
+    "optional_tools": ["calculate", "query_sensor_history"],
+    "expected_evidence_types": ["document_chunk"],
+    "min_severity": null,
+    "notes": "calculate is optional, not required — a correct comparison against the manual's 4.5 mm/s figure doesn't strictly need the tool (the model can reason about it directly), so this scenario checks documentation retrieval, not tool-use ceremony."
+  }
+]

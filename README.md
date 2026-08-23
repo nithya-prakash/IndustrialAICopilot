@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 9 (Observability) complete.** This README will grow
+**Status: Phase 10 (Evaluation) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -76,6 +76,34 @@ measured result: **MRR 0.886, Recall@5 1.0, Recall@3 0.857** (one query — a
 paraphrase, "hot to the touch" for "overheating" — ranks the correct chunk
 at position 5 rather than top-3, a genuine retrieval limitation, not
 smoothed over).
+
+## Diagnosis agent evaluation
+
+```bash
+make eval-diagnosis    # python -m evaluation.diagnosis_eval, inside the backend container
+```
+
+Runs a 5-scenario labeled set (`data/evaluation/diagnosis_scenarios.json`)
+through the real diagnosis agent loop against live Postgres/Qdrant, using
+the same self-seeded `evaluation` tenant as retrieval evaluation above
+(manual + seeded sensor history + seeded equipment/maintenance data — all
+idempotent, no manual setup). For each scenario it measures **tool
+recall** (did the agent call the tools a competent diagnostician needs for
+this question, against a hand-labeled expectation), **evidence-type
+coverage**, **citation validity rate** (fraction of causes with real
+supporting evidence — the citations themselves are already guaranteed
+non-fabricated by the agent loop's own validation, Phase 6), and whether
+severity met a deterministically-grounded floor where one applies (e.g.
+the seeded MOTOR-001 vibration anomalies should force at least "medium").
+Deliberately does **not** attempt an LLM-as-judge quality score on the
+diagnosis text — see `docs/architecture-decisions.md` for why that would
+be exactly the kind of unverified metric this project avoids elsewhere.
+
+**Requires `ANTHROPIC_API_KEY`** — unlike retrieval evaluation, there's no
+local stand-in for the agent's own reasoning, so this exits cleanly with a
+message rather than running (and never fabricates a report) if no key is
+configured — which is the case in this project's own development
+environment; see Known limitations.
 
 ## Try the document pipeline
 
@@ -416,11 +444,42 @@ interval.
   from the Python counter through Prometheus's scrape to a live PromQL
   query, within one scrape interval
 
+**Phase 10 — Evaluation**
+- Diagnosis-agent evaluation harness (`evaluation/diagnosis_eval.py`,
+  `make eval-diagnosis`), same self-contained/self-seeding pattern as
+  Phase 3's retrieval harness, extended to a surface local models can't
+  cover: the agent's own tool-selection and reasoning
+- 5-scenario labeled ground-truth set
+  (`data/evaluation/diagnosis_scenarios.json`) written directly against
+  already-verified synthetic data from earlier phases (the Phase 5
+  injected MOTOR-001 vibration spikes, the Phase 6 deliberately-overdue
+  CONVEYOR-001 maintenance task) — no new fixtures invented for this
+  phase
+- Pure, unit-tested scoring functions
+  (`app/evaluation/diagnosis_scoring.py`): tool recall, evidence-type
+  coverage, citation validity rate, severity-floor check — all
+  structural/deterministic, deliberately not an LLM-as-judge quality
+  score (see ADR for why grading diagnosis prose with another
+  unverified model call would undermine this project's own "never
+  present a fabricated number as real" rule)
+- Severity floor is only asserted where grounded in a rule the codebase
+  already enforces deterministically (Phase 6's anomaly-driven
+  escalation) — not a subjective judgment about the "right" diagnosis
+- 222 unit tests passing (14 new: scoring functions), ruff clean
+- Live-verified in Docker: the harness's missing-key path exits cleanly
+  with a clear message rather than crashing or writing a fabricated
+  report (confirmed — this environment has no `ANTHROPIC_API_KEY`, the
+  same standing limitation carried since Phase 3); separately verified
+  the full pipeline's wiring end-to-end (self-seeding against real
+  Postgres, real `run_diagnosis` persistence, scoring against real
+  `Diagnosis` objects) using a scripted stand-in model, via a one-off
+  script written and discarded specifically for this verification, not
+  left in the codebase as a testing backdoor
+
 ## Not yet implemented
 
-Evaluation (Phase 10 — end-to-end diagnosis/agent quality, beyond the
-retrieval-only harness already built in Phase 3) is next. See the phase
-plan in the project brief for the full roadmap.
+CI/CD (Phase 11) is next. See the phase plan in the project brief for
+the full roadmap.
 
 ## Known limitations
 
@@ -440,7 +499,11 @@ plan in the project brief for the full roadmap.
   model), but have not been verified against a real Anthropic call in this
   environment — no API key is currently configured. All fail cleanly with
   a clear error rather than crashing, and that failure path is
-  live-verified end-to-end through the real HTTP layer.
+  live-verified end-to-end through the real HTTP layer. Everything the
+  agent depends on — retrieval, vision preprocessing, sensor analytics,
+  tool dispatch, maintenance schedule computation — is fully live-verified
+  against real Postgres/Qdrant data; only the actual Claude API call is
+  unverified.
 - No local VLM option (Qwen-VL/LLaVA) — the provider abstraction supports
   adding one, but it wasn't built this phase (see ADR for the trade-off).
 - Tool-calling only supports `LLM_PROVIDER=anthropic` (plain generation in
@@ -454,3 +517,10 @@ plan in the project brief for the full roadmap.
   configure your own current provider rate — no price is hard-coded (see
   ADR). Token *counts* are always tracked from the provider's real usage
   response, cost is opt-in on top of that.
+- Diagnosis-agent evaluation (`evaluation/diagnosis_eval.py`) joins the
+  same no-API-key limitation as the diagnosis agent itself — the harness,
+  scoring functions, and self-seeding are fully built and verified, but
+  producing a real report needs a configured `ANTHROPIC_API_KEY`.
+  Deliberately doesn't attempt an LLM-as-judge quality score even with a
+  key available — see ADR for why that's a scoping choice, not a gap to
+  fill later.
