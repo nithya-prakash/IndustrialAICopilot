@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 3 (RAG) complete.** This README will grow
+**Status: Phase 4 (Vision) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -20,6 +20,8 @@ for design rationale on the choices below.
 - **AI providers**: configurable — Anthropic Claude by default, no dependency
   on a paid OpenAI key for local development (also supports Ollama/any
   OpenAI-compatible server via `LLM_BASE_URL`)
+- **Vision**: configurable VLM (Anthropic/OpenAI) for structured visual
+  observations with confidence + explicit uncertainty
 - **Infra**: Docker Compose, structured logging (structlog)
 
 ## Local setup
@@ -104,9 +106,24 @@ smoothed over).
 - Retrieval evaluation harness with real Recall@K/Precision@K/MRR/nDCG@K
   (`evaluation/run.py`, `make eval`)
 
+**Phase 4 — Vision**
+- Image validation via real decode (PIL), not just a trusted Content-Type
+  header — rejects corrupt/non-image files
+- Server-side re-encoding as a side effect that both strips EXIF metadata
+  (privacy — phone photos often carry GPS) and downscales to a bounded size
+- Configurable VLM provider (`app/vision/analyzer.py`): Anthropic or OpenAI,
+  same provider-abstraction pattern as `app/llm/client.py`
+- Structured output (observations with confidence, explicit limitations),
+  never inventing measurements/temperatures/internal-component condition —
+  enforced by the prompt *and* a structural post-hoc check
+  (`_flag_suspected_measurements`) that scans the model's actual output for
+  measurement-like patterns rather than only trusting the instruction
+- `ImageAnalysis` model, tenant-isolated, synchronous request/response
+  (single VLM call, no async pipeline needed)
+
 ## Not yet implemented
 
-Vision analysis (Phase 4) is next. See the phase plan in the project
+Sensor intelligence (Phase 5) is next. See the phase plan in the project
 brief for the full roadmap.
 
 ## Known limitations
@@ -120,8 +137,11 @@ brief for the full roadmap.
 - BM25 is recomputed per query over the tenant-scoped candidate set fetched
   from Postgres rather than a persistent index — fine at portfolio scale,
   documented as a scaling limitation in the ADR.
-- Live end-to-end LLM calls (`app/rag/generation.py`) are implemented and
-  thoroughly tested (parsing, citation validation), but have not been
-  verified against a real Anthropic call in this environment — no API key
-  is currently configured. Fails cleanly with a clear error rather than
+- Live end-to-end LLM/VLM calls (`app/rag/generation.py`,
+  `app/vision/analyzer.py`) are implemented and thoroughly tested (parsing,
+  citation validation, measurement-flagging), but have not been verified
+  against a real Anthropic call in this environment — no API key is
+  currently configured. Fails cleanly with a clear error rather than
   crashing.
+- No local VLM option (Qwen-VL/LLaVA) — the provider abstraction supports
+  adding one, but it wasn't built this phase (see ADR for the trade-off).

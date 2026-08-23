@@ -160,3 +160,47 @@ at a local Ollama server is a one-line config change to run entirely
 without any API key — the call sites (`app/llm/client.py`) never need to
 know which backend is actually serving the request.
 
+## Phase 4
+
+### Why re-encode every uploaded image server-side instead of trusting/passing through the original bytes?
+Three independent reasons converge on the same fix: (1) security — a
+client-supplied `Content-Type` header is a claim, not a guarantee; decoding
+the file with PIL (`Image.open().load()`) is what actually proves it's a
+real image, not just a file with a matching extension. (2) privacy — a
+technician's phone photo commonly carries EXIF GPS coordinates; re-encoding
+to a fresh JPEG buffer does not copy EXIF, so it's stripped as a side
+effect of the same step that does validation, not a separate policy to
+remember. (3) cost/latency — downscaling to a bounded max dimension before
+sending to the VLM keeps request size and API cost predictable regardless
+of what a phone camera produces natively.
+
+### Why is image analysis synchronous (request/response) instead of async via Celery like document ingestion?
+Document ingestion is a multi-stage pipeline (extract → OCR → chunk →
+embed → index) that can run tens of seconds on a large PDF — blocking an
+HTTP request for that is a bad experience, so it's queued. A single VLM
+call is one round trip; wrapping it in the same async infrastructure would
+add a polling step for no real benefit at this scale. If vision latency
+becomes a problem under load, this is the one function
+(`app/services/image_service.py:analyze_uploaded_image`) that would move
+to a Celery task — the interface wouldn't need to change.
+
+### How fabricated measurements/temperatures/internal-damage claims are prevented, beyond the prompt
+The system prompt instructs the model not to state measurements or claim
+knowledge of internal/hidden condition — but a prompt instruction is not a
+guarantee, so it isn't the only safeguard. `_flag_suspected_measurements`
+(`app/vision/analyzer.py`) is a structural, tested check: it scans every
+observation the model actually returned for a number-with-unit pattern
+(mm, °C, psi, RPM, etc.) and — if the model stated one anyway — appends an
+explicit limitation surfacing that fact, rather than silently trusting the
+prompt worked. This mirrors the citation-validation approach in Phase 3:
+don't just instruct the model and hope, add a check on the output.
+
+### Why no local VLM (Qwen-VL/LLaVA) option, unlike the local embedding/reranking models?
+The brief calls this out as "where practical." A local VLM needs a
+multi-gigabyte model download and a GPU-friendly inference setup to be
+usable at reasonable latency — a materially bigger lift than the embedding/
+reranker models (tens of MB, fast on CPU) already running locally. The
+provider abstraction (`VISION_PROVIDER`) is built so adding one later is a
+new branch in `app/vision/analyzer.py`, not a rewrite — documented here as
+a deliberate scope cut, not an oversight.
+

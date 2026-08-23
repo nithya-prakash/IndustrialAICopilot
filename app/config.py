@@ -21,7 +21,18 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_agent_model: str = "claude-haiku-4-5-20251001"
 
+    anthropic_vision_model: str = "claude-haiku-4-5-20251001"
+
     openai_api_key: str = ""
+    openai_vision_model: str = "gpt-4o-mini"
+    vision_provider: str = "anthropic"  # "anthropic" | "openai"
+    vision_api_key: str = ""  # falls back to anthropic_api_key/openai_api_key if empty
+
+    max_image_size_bytes: int = 15 * 1024 * 1024  # 15MB
+    allowed_image_content_types: str = "image/jpeg,image/png,image/webp"
+    # Images are downscaled before being sent to the VLM (cost/latency, and
+    # most providers cap input image dimensions anyway).
+    image_max_dimension_px: int = 1568
 
     # Configurable chat-completion provider used by RAG generation and (later)
     # the diagnosis agent. "openai" also covers Ollama/any OpenAI-compatible
@@ -62,6 +73,24 @@ class Settings(BaseSettings):
     @property
     def allowed_upload_content_types_list(self) -> list[str]:
         return [t.strip() for t in self.allowed_upload_content_types.split(",") if t.strip()]
+
+    @property
+    def allowed_image_content_types_list(self) -> list[str]:
+        return [t.strip() for t in self.allowed_image_content_types.split(",") if t.strip()]
+
+    @property
+    def resolved_vision_api_key(self) -> str:
+        if self.vision_api_key:
+            return self.vision_api_key
+        if self.vision_provider == "anthropic":
+            return self.anthropic_api_key
+        return self.openai_api_key
+
+    @property
+    def vision_model(self) -> str:
+        if self.vision_provider == "anthropic":
+            return self.anthropic_vision_model
+        return self.openai_vision_model
 
     @property
     def cors_origins_list(self) -> list[str]:
