@@ -1,4 +1,4 @@
-.PHONY: up down build logs test lint migrate revision shell
+.PHONY: up down build logs test lint migrate revision shell eval
 
 up:
 	docker compose up --build
@@ -26,3 +26,6 @@ revision:
 
 shell:
 	docker compose run --rm backend bash
+
+eval:
+	docker compose run --rm backend python -m evaluation.run

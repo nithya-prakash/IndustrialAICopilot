@@ -1,0 +1,30 @@
+[
+  {
+    "question": "What should I check if motor vibration increases?",
+    "expected_sources": ["electric_motor_manual.pdf:Troubleshooting > Excessive vibration"]
+  },
+  {
+    "question": "The motor housing feels very hot to the touch. What could be wrong?",
+    "expected_sources": ["electric_motor_manual.pdf:Troubleshooting > Overheating"]
+  },
+  {
+    "question": "I hear a grinding noise coming from the motor. What does that usually indicate?",
+    "expected_sources": ["electric_motor_manual.pdf:Troubleshooting > Unusual noise"]
+  },
+  {
+    "question": "How often should the bearings be inspected and should they be replaced individually?",
+    "expected_sources": ["electric_motor_manual.pdf:Maintenance > Bearings"]
+  },
+  {
+    "question": "What type of grease should I use when re-lubricating the motor bearings?",
+    "expected_sources": ["electric_motor_manual.pdf:Maintenance > Lubrication"]
+  },
+  {
+    "question": "What safety precautions should I take before servicing the motor?",
+    "expected_sources": ["electric_motor_manual.pdf:Safety"]
+  },
+  {
+    "question": "How should the motor be mounted and aligned during installation?",
+    "expected_sources": ["electric_motor_manual.pdf:Installation"]
+  }
+]

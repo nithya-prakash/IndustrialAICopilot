@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 2 (Document Intelligence) complete.** This README will grow
+**Status: Phase 3 (RAG) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -15,6 +15,8 @@ for design rationale on the choices below.
 - **Backend**: FastAPI, SQLAlchemy (async), Alembic, PostgreSQL
 - **Ingestion**: pdfplumber (structure-aware extraction), Tesseract OCR
   fallback for scanned pages, Celery + Redis for async processing
+- **Retrieval**: Qdrant (dense) + BM25 (lexical) hybrid search with
+  Reciprocal Rank Fusion, cross-encoder reranking, all local models
 - **AI providers**: configurable — Anthropic Claude by default, no dependency
   on a paid OpenAI key for local development (also supports Ollama/any
   OpenAI-compatible server via `LLM_BASE_URL`)
@@ -43,6 +45,22 @@ make migrate              # apply migrations
 make revision m="message" # generate a new migration from model changes
 ```
 
+## Retrieval evaluation
+
+```bash
+make eval    # python -m evaluation.run, inside the backend container
+```
+
+Runs a 7-question ground-truth set (`data/evaluation/rag_questions.json`)
+through the real hybrid retrieval pipeline against live Postgres+Qdrant and
+prints/saves actual measured Recall@K, Precision@K, MRR, and nDCG@5 — no
+metric here is hard-coded. Self-contained: indexes the synthetic sample
+manual automatically on first run if it isn't already there. Current
+measured result: **MRR 0.886, Recall@5 1.0, Recall@3 0.857** (one query — a
+paraphrase, "hot to the touch" for "overheating" — ranks the correct chunk
+at position 5 rather than top-3, a genuine retrieval limitation, not
+smoothed over).
+
 ## Implemented so far
 
 **Phase 1 — Foundation**
@@ -70,9 +88,25 @@ make revision m="message" # generate a new migration from model changes
 - Document list/detail/delete endpoints (delete cleans up DB rows, on-disk
   files, and Qdrant points)
 
+**Phase 3 — RAG**
+- Hybrid retrieval: dense (Qdrant) + BM25 (lexical, Postgres-scoped),
+  combined with Reciprocal Rank Fusion (`app/rag/retrieval.py`)
+- Cross-encoder reranking (local, `sentence-transformers` `CrossEncoder`)
+- Metadata filtering (tenant always enforced; equipment type/ID, document,
+  current-version-only optional) — verified live, including that a
+  different tenant gets zero results from another tenant's manuals
+- Grounded generation (`app/rag/generation.py`) with structural citation
+  validation: the model cites by index into a numbered source list, so a
+  citation is either a real retrieved chunk or flagged invalid and
+  dropped — never a fabricated filename/page
+- Configurable LLM provider (`app/llm/client.py`): Anthropic by default,
+  OpenAI-compatible (incl. local Ollama) as a drop-in alternative
+- Retrieval evaluation harness with real Recall@K/Precision@K/MRR/nDCG@K
+  (`evaluation/run.py`, `make eval`)
+
 ## Not yet implemented
 
-RAG / hybrid retrieval (Phase 3) is next. See the phase plan in the project
+Vision analysis (Phase 4) is next. See the phase plan in the project
 brief for the full roadmap.
 
 ## Known limitations
@@ -83,3 +117,11 @@ brief for the full roadmap.
   metadata at all, so heading detection there falls back to a weaker
   text-pattern heuristic (numbered/ALL-CAPS headings).
 - No token revocation/blocklist yet (JWTs are valid until expiry).
+- BM25 is recomputed per query over the tenant-scoped candidate set fetched
+  from Postgres rather than a persistent index — fine at portfolio scale,
+  documented as a scaling limitation in the ADR.
+- Live end-to-end LLM calls (`app/rag/generation.py`) are implemented and
+  thoroughly tested (parsing, citation validation), but have not been
+  verified against a real Anthropic call in this environment — no API key
+  is currently configured. Fails cleanly with a clear error rather than
+  crashing.

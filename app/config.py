@@ -18,8 +18,32 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_collection: str = "manual_chunks"
 
+    anthropic_api_key: str = ""
+    anthropic_agent_model: str = "claude-haiku-4-5-20251001"
+
+    openai_api_key: str = ""
+
+    # Configurable chat-completion provider used by RAG generation and (later)
+    # the diagnosis agent. "openai" also covers Ollama/any OpenAI-compatible
+    # server via LLM_BASE_URL (e.g. http://localhost:11434/v1).
+    llm_provider: str = "anthropic"  # "anthropic" | "openai"
+    llm_model: str = "claude-haiku-4-5-20251001"
+    llm_api_key: str = ""  # falls back to anthropic_api_key/openai_api_key if empty
+    llm_base_url: str = ""
+
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 384
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    # Retrieval tuning
+    dense_top_k: int = 20
+    bm25_top_k: int = 20
+    rrf_k: int = 60
+    rerank_top_k: int = 5
+    # Cross-encoder logits are unbounded (not a [0,1] probability) and their
+    # range depends on the model, so this defaults low enough to be a no-op.
+    # Tune based on the observed score distribution for RERANK_MODEL.
+    min_relevance_score: float = -100.0
 
     rate_limit_default: str = "60/minute"
 
@@ -46,6 +70,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
+
+    @property
+    def resolved_llm_api_key(self) -> str:
+        if self.llm_api_key:
+            return self.llm_api_key
+        return self.anthropic_api_key if self.llm_provider == "anthropic" else self.openai_api_key
 
 
 @lru_cache
