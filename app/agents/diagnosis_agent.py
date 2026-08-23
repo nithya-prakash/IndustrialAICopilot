@@ -22,6 +22,7 @@ from app.config import get_settings
 from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
+from app.services.audit_service import log_event
 from app.tools.definitions import TOOL_DEFINITIONS
 from app.tools.executor import ToolContext, ToolExecutionResult, execute_tool
 
@@ -239,6 +240,15 @@ async def _persist_failed_diagnosis(
     db.add(diagnosis)
     await db.flush()
     db.add(Message(conversation_id=conversation.id, role=MessageRole.user, content=question))
+    await log_event(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user_id,
+        action="diagnosis.failed",
+        resource_type="diagnosis",
+        resource_id=diagnosis.id,
+        detail={"error": error_message},
+    )
     await db.commit()
     await db.refresh(diagnosis)
     return diagnosis
@@ -430,6 +440,19 @@ async def run_diagnosis(
             content=summary,
             diagnosis_id=diagnosis.id,
         )
+    )
+    await log_event(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user_id,
+        action="diagnosis.created",
+        resource_type="diagnosis",
+        resource_id=diagnosis.id,
+        detail={
+            "confidence": confidence,
+            "severity": severity_str,
+            "requires_human_approval": approval_required,
+        },
     )
     await db.commit()
     await db.refresh(diagnosis)

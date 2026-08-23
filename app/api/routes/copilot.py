@@ -4,14 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.diagnosis_agent import run_diagnosis
 from app.core.deps import get_current_user
 from app.database import get_db
+from app.models.approval import Approval
 from app.models.diagnosis import Diagnosis
 from app.models.user import User
-from app.schemas.copilot import CopilotQueryRequest, DiagnosisResponse
+from app.schemas.copilot import ApprovalResponse, CopilotQueryRequest, DiagnosisResponse
 
 router = APIRouter(prefix="/api/v1/copilot", tags=["copilot"])
 
 
-def to_diagnosis_response(diagnosis: Diagnosis) -> DiagnosisResponse:
+def to_diagnosis_response(
+    diagnosis: Diagnosis, approval: Approval | None = None
+) -> DiagnosisResponse:
     return DiagnosisResponse(
         id=diagnosis.id,
         conversation_id=diagnosis.conversation_id,
@@ -34,6 +37,17 @@ def to_diagnosis_response(diagnosis: Diagnosis) -> DiagnosisResponse:
         llm_provider=diagnosis.llm_provider,
         llm_model=diagnosis.llm_model,
         created_at=diagnosis.created_at,
+        approval=(
+            ApprovalResponse(
+                id=approval.id,
+                decision=approval.decision.value,
+                supervisor_id=approval.supervisor_id,
+                comments=approval.comments,
+                created_at=approval.created_at,
+            )
+            if approval
+            else None
+        ),
     )
 
 

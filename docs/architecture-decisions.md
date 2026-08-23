@@ -322,3 +322,57 @@ compute overdue status, which is real per-equipment data with no honest
 way to derive it from existing tables. That's the concrete trigger the
 earlier ADR entries said to wait for.
 
+## Phase 7
+
+### Why human approval, at all?
+The system computes confidence and severity itself (Phase 6), but a
+computed number is not the same as a decision with consequences — an AI
+diagnosis recommending equipment be taken offline, or one with confidence
+below the threshold, needs a person accountable for the next action, not
+just a stored score. This is the standard pattern for AI in safety- or
+cost-sensitive operational contexts: the model proposes, a qualified human
+disposes. `requires_human_approval` (computed deterministically in Phase 6)
+is the trigger; this phase is what a supervisor actually does about it.
+
+### Why one decision per diagnosis (a `UniqueConstraint` on `diagnosis_id`), not a mutable/re-decidable approval?
+An approval is a compliance record — allowing a supervisor to silently
+overwrite an earlier "approved" with "rejected" (or vice versa) would make
+the audit trail lie about what was actually decided and when. If a
+technician disagrees with a rejection, the honest path is a new question
+(a new `Diagnosis`, evaluated fresh), not mutating history. Enforced at
+the database level, not just application logic — `approve_diagnosis`/
+`reject_diagnosis` both go through the same `_decide` function and a
+second call for the same diagnosis gets a `409`, live-verified.
+
+### Why structured, role-gated approve/reject rather than a generic "update diagnosis status" endpoint?
+`require_roles(UserRole.supervisor, UserRole.admin)` on both endpoints
+means the authorization rule is enforced once, declaratively, at the route
+— not re-checked ad hoc inside a generic handler that could also do other
+things. A technician being unable to approve their own diagnosis is a
+real segregation-of-duties requirement for a compliance-sensitive
+workflow, not an incidental restriction; live-verified as a `403`.
+
+### Why an `AuditLog` table separate from `Diagnosis.tool_calls`?
+`Diagnosis.tool_calls` (Phase 6) is a per-diagnosis, denormalized record
+of what the agent did — useful for showing "how did it reach this
+conclusion" on one diagnosis. `AuditLog` is the broader, append-only
+compliance log the brief's section 18 asks for: who did what, when, across
+diagnosis creation, approval decisions, and document lifecycle events —
+queryable independent of any single diagnosis (e.g. "show me every action
+this user took," not built yet, but the schema supports it directly).
+Scoped this phase to the compliance-sensitive actions (diagnosis
+create/approve/reject, document upload/delete) via one `log_event` call
+each, rather than instrumenting every mutating endpoint — extending
+coverage is the same call, not new architecture, documented as a scope
+limit rather than assumed complete.
+
+### Why `AuditLog.detail` doesn't include a full snapshot of the resource
+Storing the diagnosis's full evidence/causes/etc. on every audit event
+would duplicate `Diagnosis` itself and go stale the moment the source
+record changed (it can't, here, but the pattern would still be wrong to
+establish). `detail` holds only what's specific to *that event*
+(confidence/severity at creation time, decision comments) — the audit log
+points at the resource by ID and lets the caller join to the current
+record for the rest, which is also why it stayed a lightweight `resource_
+type`/`resource_id` pair rather than per-resource-type foreign keys.
+

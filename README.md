@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 6 (Diagnosis Agent) complete.** This README will grow
+**Status: Phase 7 (Human Approval) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -28,6 +28,8 @@ for design rationale on the choices below.
   sensor history, image analysis, maintenance schedule, safe calculator,
   report generation), deterministic confidence scoring, structural
   citation validation across all evidence types
+- **Human-in-the-loop**: role-gated supervisor approve/reject workflow,
+  append-only audit log
 - **Infra**: Docker Compose, structured logging (structlog)
 
 ## Local setup
@@ -140,6 +142,21 @@ diagnosis. Without `ANTHROPIC_API_KEY` configured this returns a `200` with
 `status: "failed"` and a clear `error_message` rather than a crash — see
 Known limitations.
 
+## Try the approval workflow
+
+```bash
+# as a supervisor or admin registered in the same tenant as the diagnosis:
+curl -X POST localhost:8000/api/v1/diagnoses/$DIAGNOSIS_ID/approve \
+  -H "Authorization: Bearer $SUPERVISOR_TOKEN" -H "Content-Type: application/json" \
+  -d '{"comments":"Confirmed via evidence review."}'
+```
+
+`GET /api/v1/diagnoses?pending_approval=true` lists diagnoses that need a
+decision (completed, flagged `requires_human_approval`, not yet decided).
+A decision, once made, can't be re-decided (`409` on a second attempt) —
+disagreements go through a fresh question, not mutated history. Admins can
+review the full audit trail: `GET /api/v1/audit-logs`.
+
 ## Implemented so far
 
 **Phase 1 — Foundation**
@@ -246,10 +263,26 @@ Known limitations.
   tool calls gathered before the failure (a real gap found and fixed this
   phase, not assumed correct)
 
+**Phase 7 — Human Approval**
+- `Approval` model: one decision per diagnosis (`UniqueConstraint` on
+  `diagnosis_id`) — approving/rejecting twice returns `409`, live-verified;
+  disagreements go through a fresh question, not mutated history
+- `POST /api/v1/diagnoses/{id}/approve` / `.../reject`, role-gated to
+  supervisor/admin (`403` for technician, live-verified)
+- `GET /api/v1/diagnoses?pending_approval=true` — completed, flagged
+  `requires_human_approval`, not yet decided
+- `AuditLog`: append-only event log covering the diagnosis lifecycle
+  (created/failed/approved/rejected) and document lifecycle
+  (uploaded/deleted); admin-only `GET /api/v1/audit-logs`
+- Live-verified end-to-end through the real HTTP API: technician blocked,
+  supervisor approves with comments, second decision attempt rejected with
+  `409`, admin sees the approval event in the audit log, diagnosis drops
+  out of the pending-approval list once decided
+
 ## Not yet implemented
 
-Human-in-the-loop approval (Phase 7) is next. See the phase plan in the
-project brief for the full roadmap.
+The frontend (Phase 8) is next. See the phase plan in the project brief
+for the full roadmap.
 
 ## Known limitations
 

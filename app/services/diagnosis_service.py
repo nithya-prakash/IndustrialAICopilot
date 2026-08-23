@@ -4,12 +4,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.approval import Approval
 from app.models.conversation import Conversation
-from app.models.diagnosis import Diagnosis
+from app.models.diagnosis import Diagnosis, DiagnosisStatus
 
 
 async def list_diagnoses(
-    db: AsyncSession, *, tenant_id: str, equipment_id: str | None = None
+    db: AsyncSession,
+    *,
+    tenant_id: str,
+    equipment_id: str | None = None,
+    pending_approval_only: bool = False,
 ) -> list[Diagnosis]:
     query = (
         select(Diagnosis)
@@ -18,8 +23,24 @@ async def list_diagnoses(
     )
     if equipment_id:
         query = query.where(Diagnosis.equipment_id == equipment_id)
+    if pending_approval_only:
+        decided_ids = select(Approval.diagnosis_id)
+        query = query.where(
+            Diagnosis.status == DiagnosisStatus.completed,
+            Diagnosis.requires_human_approval.is_(True),
+            Diagnosis.id.not_in(decided_ids),
+        )
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def get_approvals_for_diagnoses(
+    db: AsyncSession, *, diagnosis_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, Approval]:
+    if not diagnosis_ids:
+        return {}
+    result = await db.execute(select(Approval).where(Approval.diagnosis_id.in_(diagnosis_ids)))
+    return {a.diagnosis_id: a for a in result.scalars().all()}
 
 
 async def get_diagnosis(
