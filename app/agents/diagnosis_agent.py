@@ -10,6 +10,7 @@ injecting a fake model function, without needing a real LLM call. See
 tests/test_diagnosis_agent.py.
 """
 import json
+import time
 import uuid
 from dataclasses import dataclass, field
 
@@ -22,6 +23,13 @@ from app.config import get_settings
 from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
+from app.observability.metrics import (
+    agent_tool_call_duration_seconds,
+    agent_tool_calls_total,
+    diagnoses_total,
+    diagnosis_confidence,
+    record_llm_call,
+)
 from app.services.audit_service import log_event
 from app.tools.definitions import TOOL_DEFINITIONS
 from app.tools.executor import ToolContext, ToolExecutionResult, execute_tool
@@ -84,12 +92,32 @@ async def _call_anthropic(messages: list[dict], system: str) -> ModelTurn:
     import anthropic
 
     client = anthropic.AsyncAnthropic(api_key=settings.resolved_llm_api_key)
-    response = await client.messages.create(
+    start = time.perf_counter()
+    try:
+        response = await client.messages.create(
+            model=settings.llm_model,
+            max_tokens=2048,
+            system=system,
+            messages=messages,
+            tools=TOOL_DEFINITIONS,
+        )
+    except Exception:
+        record_llm_call(
+            provider="anthropic",
+            model=settings.llm_model,
+            operation="agent",
+            status="error",
+            duration_seconds=time.perf_counter() - start,
+        )
+        raise
+    record_llm_call(
+        provider="anthropic",
         model=settings.llm_model,
-        max_tokens=2048,
-        system=system,
-        messages=messages,
-        tools=TOOL_DEFINITIONS,
+        operation="agent",
+        status="success",
+        duration_seconds=time.perf_counter() - start,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
     )
     text = "".join(block.text for block in response.content if block.type == "text")
     tool_calls = [
@@ -239,6 +267,9 @@ async def _persist_failed_diagnosis(
     )
     db.add(diagnosis)
     await db.flush()
+
+    diagnoses_total.labels(status="failed", severity=DiagnosisSeverity.low.value).inc()
+
     db.add(Message(conversation_id=conversation.id, role=MessageRole.user, content=question))
     await log_event(
         db,
@@ -320,7 +351,14 @@ async def run_diagnosis(
 
             tool_results_content = []
             for call in turn.tool_calls:
+                tool_start = time.perf_counter()
                 result = await execute_tool(call.name, call.input, ctx)
+                agent_tool_call_duration_seconds.labels(tool=call.name).observe(
+                    time.perf_counter() - tool_start
+                )
+                agent_tool_calls_total.labels(
+                    tool=call.name, status="error" if result.error else "success"
+                ).inc()
                 tool_call_log.append(
                     {
                         "tool": call.name,
@@ -431,6 +469,9 @@ async def run_diagnosis(
     )
     db.add(diagnosis)
     await db.flush()
+
+    diagnoses_total.labels(status="completed", severity=severity_str).inc()
+    diagnosis_confidence.observe(confidence)
 
     db.add(Message(conversation_id=conversation.id, role=MessageRole.user, content=question))
     db.add(

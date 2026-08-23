@@ -12,9 +12,11 @@ prompt to have worked. See docs/architecture-decisions.md.
 import base64
 import json
 import re
+import time
 from dataclasses import dataclass
 
 from app.config import get_settings
+from app.observability.metrics import record_llm_call
 
 MEASUREMENT_PATTERN = re.compile(
     r"\b\d+(\.\d+)?\s*"
@@ -85,22 +87,46 @@ async def _anthropic_vision(image_bytes: bytes, media_type: str, user_prompt: st
 
     client = anthropic.AsyncAnthropic(api_key=settings.resolved_vision_api_key)
     encoded = base64.b64encode(image_bytes).decode()
-    response = await client.messages.create(
+    start = time.perf_counter()
+    try:
+        response = await client.messages.create(
+            model=settings.vision_model,
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": encoded,
+                            },
+                        },
+                        {"type": "text", "text": user_prompt},
+                    ],
+                }
+            ],
+        )
+    except Exception:
+        record_llm_call(
+            provider="anthropic",
+            model=settings.vision_model,
+            operation="vision",
+            status="error",
+            duration_seconds=time.perf_counter() - start,
+        )
+        raise
+    record_llm_call(
+        provider="anthropic",
         model=settings.vision_model,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": media_type, "data": encoded},
-                    },
-                    {"type": "text", "text": user_prompt},
-                ],
-            }
-        ],
+        operation="vision",
+        status="success",
+        duration_seconds=time.perf_counter() - start,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
     )
     return "".join(block.text for block in response.content if block.type == "text")
 
@@ -117,19 +143,40 @@ async def _openai_vision(image_bytes: bytes, media_type: str, user_prompt: str) 
     client = openai.AsyncOpenAI(api_key=settings.resolved_vision_api_key)
     encoded = base64.b64encode(image_bytes).decode()
     data_url = f"data:{media_type};base64,{encoded}"
-    response = await client.chat.completions.create(
+    start = time.perf_counter()
+    try:
+        response = await client.chat.completions.create(
+            model=settings.vision_model,
+            max_tokens=1024,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+        )
+    except Exception:
+        record_llm_call(
+            provider="openai",
+            model=settings.vision_model,
+            operation="vision",
+            status="error",
+            duration_seconds=time.perf_counter() - start,
+        )
+        raise
+    usage = response.usage
+    record_llm_call(
+        provider="openai",
         model=settings.vision_model,
-        max_tokens=1024,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": user_prompt},
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                ],
-            },
-        ],
+        operation="vision",
+        status="success",
+        duration_seconds=time.perf_counter() - start,
+        input_tokens=usage.prompt_tokens if usage else 0,
+        output_tokens=usage.completion_tokens if usage else 0,
     )
     return response.choices[0].message.content or ""
 

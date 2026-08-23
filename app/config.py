@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     confidence_approval_threshold: float = 0.75
     diagnosis_timeout_seconds: int = 5
 
+    # Optional LLM cost tracking (USD per 1K tokens). Left at 0.0 (disabled) by
+    # default rather than baking in a guessed/stale published price — set these
+    # to your actual current provider rate to enable the llm_cost_usd_total
+    # metric. Token *counts* are always tracked regardless (they come straight
+    # from the provider's own usage response, not an estimate).
+    anthropic_input_cost_per_1k_usd: float = 0.0
+    anthropic_output_cost_per_1k_usd: float = 0.0
+    openai_input_cost_per_1k_usd: float = 0.0
+    openai_output_cost_per_1k_usd: float = 0.0
+
     rate_limit_default: str = "60/minute"
 
     redis_url: str = "redis://localhost:6379/0"

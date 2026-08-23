@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 8 (Frontend) complete.** This README will grow
+**Status: Phase 9 (Observability) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -33,7 +33,10 @@ for design rationale on the choices below.
 - **Frontend**: React 19 + Vite + TypeScript, hand-rolled CSS design
   system, role-aware SPA (Dashboard, Knowledge Base, AI Copilot, Evidence
   panel, Approval Dashboard, Audit Log)
-- **Infra**: Docker Compose, structured logging (structlog)
+- **Observability**: Prometheus metrics (HTTP, LLM/VLM calls + token usage,
+  agent tool calls, diagnoses, approvals) + Grafana dashboard, on top of
+  structured logging (structlog)
+- **Infra**: Docker Compose
 
 ## Local setup
 
@@ -186,6 +189,32 @@ development with hot reload instead of the Docker build:
 cd frontend && npm install && npm run dev
 ```
 
+## Try observability
+
+```bash
+docker compose up --build backend prometheus grafana
+```
+
+- **Raw metrics**: http://localhost:8000/metrics (Prometheus text format —
+  unauthenticated by design, see ADR)
+- **Prometheus**: http://localhost:9091 — confirm the scrape target is
+  `up` under Status > Targets, or run a query like `diagnoses_total`
+- **Grafana**: http://localhost:3003 (login `admin`/`admin`, or browse
+  anonymously — read-only viewer access is enabled for local convenience)
+  → Dashboards → "Industrial Copilot", pre-provisioned with panels for
+  HTTP request rate/latency, LLM/VLM call rate/latency/token usage, agent
+  tool-call rate, diagnoses created, confidence distribution, and approval
+  decisions
+
+Every panel is wired to real, currently-empty-or-populated data, not a
+mock — the HTTP panels populate immediately from normal API traffic; the
+LLM/VLM panels show "No data" until a real Anthropic call succeeds (see
+Known limitations), and the diagnosis/approval panels populate as soon as
+you run the copilot/approval flows above. Confirmed end-to-end this
+phase: a real `copilot/query` request (failing cleanly on the
+no-API-key path) shows up in `diagnoses_total` within one scrape
+interval.
+
 ## Implemented so far
 
 **Phase 1 — Foundation**
@@ -335,10 +364,63 @@ cd frontend && npm install && npm run dev
   cross-origin request to the backend (no CORS failure, no mocked
   response)
 
+**Phase 9 — Observability**
+- Prometheus metrics (`app/observability/metrics.py`), scraped from a
+  `/metrics` endpoint, deliberately unauthenticated (standard Prometheus
+  practice — see ADR)
+- HTTP metrics (`app/main.py`): request rate + duration, labeled by
+  route *template* (`/api/v1/diagnoses/{diagnosis_id}`), not raw path —
+  avoids unbounded label cardinality from UUIDs or scanned URLs
+- LLM/VLM metrics (`app/llm/client.py`, `app/vision/analyzer.py`,
+  `app/agents/diagnosis_agent.py`): call rate/status, latency, and real
+  token counts from each provider's own `usage` field — one shared
+  `record_llm_call()` helper across all three call sites (generation,
+  vision, agent)
+- Cost tracking is opt-in and config-driven
+  (`ANTHROPIC_INPUT_COST_PER_1K_USD` etc., default `0.0`) rather than a
+  hard-coded price table — this project's standing rule against
+  presenting a fabricated number as real, applied to cost the same way
+  it's applied to citations and measurements (see ADR)
+- Agent tool-call metrics: rate/status/latency per tool
+  (`app/agents/diagnosis_agent.py`), so a slow or failing tool in a
+  multi-step diagnosis is visible, not just the end-to-end result
+- Business metrics: `diagnoses_total` (status/severity),
+  `diagnosis_confidence` (histogram), `approvals_total` (decision) —
+  hooked into diagnosis creation/failure
+  (`app/agents/diagnosis_agent.py`) and the single `_decide()` approval
+  function (`app/services/approval_service.py`)
+- Prometheus + Grafana containers (`docker-compose.yml`,
+  `observability/`), Grafana pre-provisioned with a Prometheus datasource
+  and a 9-panel starter dashboard — no manual setup required after
+  `docker compose up`
+- Scoped out this phase, documented as such: Celery worker/ingestion
+  metrics (would need a multiprocess-safe registry — see ADR)
+- Incidental fix found via `docker compose ps` while verifying this
+  phase: the Phase 8 frontend container had been reporting `unhealthy`
+  since it was built, despite serving correct traffic — its Dockerfile
+  `HEALTHCHECK` used `wget http://localhost:3000/`, which resolves to
+  `::1` first inside that image and fails, since nginx only binds IPv4.
+  Fixed to check `127.0.0.1` directly (see ADR)
+- 208 unit tests passing (7 new — HTTP metrics via the real endpoint,
+  the `record_llm_call` helper incl. cost-calculation on/off, agent
+  tool-call + diagnosis metrics via a scripted fake model, approval
+  metrics), ruff clean
+- Live-verified in Docker (not just unit tests): `/metrics` returns real
+  data after real requests; Prometheus target shows `up` and its scraped
+  values match the backend's own `/metrics` output exactly; the Grafana
+  dashboard renders all 9 panels with no query errors — HTTP panels show
+  real traffic immediately, LLM/agent panels correctly show "No data"
+  (no fabricated placeholder values); a real `POST /copilot/query`
+  request through the full HTTP stack (register → auth → agent →
+  clean no-API-key failure) shows up in `diagnoses_total` end-to-end,
+  from the Python counter through Prometheus's scrape to a live PromQL
+  query, within one scrape interval
+
 ## Not yet implemented
 
-Observability (Phase 9) is next. See the phase plan in the project brief
-for the full roadmap.
+Evaluation (Phase 10 — end-to-end diagnosis/agent quality, beyond the
+retrieval-only harness already built in Phase 3) is next. See the phase
+plan in the project brief for the full roadmap.
 
 ## Known limitations
 
@@ -364,3 +446,11 @@ for the full roadmap.
 - Tool-calling only supports `LLM_PROVIDER=anthropic` (plain generation in
   Phase 3 supports OpenAI-compatible too) — a scoped trade-off, not an
   oversight (see ADR).
+- Prometheus/Grafana observability covers the FastAPI backend process only
+  — the Celery worker (document ingestion) isn't scraped, since it runs
+  multiple forked processes and doesn't serve HTTP (see ADR for what that
+  would take to add).
+- LLM/VLM cost tracking (`llm_cost_usd_total`) stays at zero unless you
+  configure your own current provider rate — no price is hard-coded (see
+  ADR). Token *counts* are always tracked from the provider's real usage
+  response, cost is opt-in on top of that.

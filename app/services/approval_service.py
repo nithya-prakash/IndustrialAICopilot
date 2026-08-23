@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.approval import Approval, ApprovalDecision
 from app.models.diagnosis import Diagnosis, DiagnosisStatus
+from app.observability.metrics import approvals_total
 from app.services.audit_service import log_event
 
 
@@ -60,6 +61,8 @@ async def _decide(
     )
     db.add(approval)
     await db.flush()
+
+    approvals_total.labels(decision=decision.value).inc()
 
     await log_event(
         db,
