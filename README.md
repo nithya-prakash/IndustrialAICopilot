@@ -583,14 +583,15 @@ interval.
   per phase (see ADR) using this project's own phase-by-phase
   documentation as the record of what changed when, so CI has real
   history to run against
-- Not live-verified against an actual GitHub Actions run in this
-  environment — no `gh` CLI auth and no existing remote here, and
-  creating a repo + pushing is exactly the kind of external-consequence
-  action this project's operating rules require the user to authorize
-  and perform themselves (see ADR). Every path/script the workflow
-  references was cross-checked against the real route definitions and
-  `package.json`, and its YAML was syntax-validated — what's unverified
-  is specifically whether it goes green on GitHub
+- Live-verified against a real GitHub Actions run after pushing: the
+  first run correctly caught a genuine gap — two tests hit a real Qdrant
+  client for document-deletion cleanup, and the `backend` job had no
+  Qdrant service, something the local Docker-based workflow could never
+  have caught since Qdrant is always running there as a sibling service.
+  Fixed by adding a `services: qdrant:` block to that job (see ADR) and
+  verified the fix directly (a standalone Qdrant + the same two test
+  files, 8/8 passed) before pushing again — exactly the kind of thing
+  CI exists to catch, working as intended on the very first real run
 
 **Phase 12 — Final Polish**
 - [`docs/security.md`](docs/security.md): a consolidated security model
@@ -673,9 +674,3 @@ extensions this project could reasonably grow into, not commitments:
   Deliberately doesn't attempt an LLM-as-judge quality score even with a
   key available — see ADR for why that's a scoping choice, not a gap to
   fill later.
-- CI (`.github/workflows/ci.yml`) has not run against a real GitHub
-  Actions execution in this environment — no GitHub remote existed here
-  to push to. Built and cross-checked as rigorously as everything else
-  (every path/script it references verified against the real code, YAML
-  syntax-validated), but "does it actually go green on GitHub" is
-  unverified until pushed — see ADR.

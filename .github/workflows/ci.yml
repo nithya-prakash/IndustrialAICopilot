@@ -10,6 +10,20 @@ jobs:
   backend:
     name: Backend (lint + test)
     runs-on: ubuntu-latest
+    # The sqlite-based test fixtures (tests/conftest.py) cover the DB layer,
+    # but document deletion also cleans up real Qdrant points
+    # (app/rag/qdrant_store.py:get_qdrant_client() always talks to a real
+    # QdrantClient, never mocked — same "verify against real infra" choice
+    # as the Tesseract/poppler dependencies above) — tests/test_document_
+    # upload.py and tests/test_document_audit_log.py exercise that path and
+    # need a real Qdrant to connect to, or they fail with connection
+    # refused despite passing inside the app's own docker-compose stack
+    # where Qdrant is always running alongside.
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.4
+        ports:
+          - 6333:6333
     steps:
       - uses: actions/checkout@v4
 
