@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 4 (Vision) complete.** This README will grow
+**Status: Phase 5 (Sensor Intelligence) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -22,6 +22,8 @@ for design rationale on the choices below.
   OpenAI-compatible server via `LLM_BASE_URL`)
 - **Vision**: configurable VLM (Anthropic/OpenAI) for structured visual
   observations with confidence + explicit uncertainty
+- **Sensor analytics**: trend detection, statistical + ML-based (Isolation
+  Forest) anomaly detection, baseline comparison — `numpy`/`scikit-learn`
 - **Infra**: Docker Compose, structured logging (structlog)
 
 ## Local setup
@@ -62,6 +64,54 @@ measured result: **MRR 0.886, Recall@5 1.0, Recall@3 0.857** (one query — a
 paraphrase, "hot to the touch" for "overheating" — ranks the correct chunk
 at position 5 rather than top-3, a genuine retrieval limitation, not
 smoothed over).
+
+## Try the document pipeline
+
+```bash
+docker compose run --rm backend python scripts/generate_sample_manual.py
+```
+
+generates a synthetic electric-motor manual at `data/manuals/electric_motor_manual.pdf`
+(original content, not copied from any real manufacturer). Upload it:
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"tech1","email":"tech1@example.com","password":"correct-horse-battery","tenant_id":"acme"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+
+curl -X POST localhost:8000/api/v1/documents/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@data/manuals/electric_motor_manual.pdf;type=application/pdf" \
+  -F "equipment_type=electric_motor" -F "equipment_id=MOTOR-001"
+```
+
+Poll `GET /api/v1/documents/{id}` — status moves through
+`uploaded -> processing -> extracting -> (ocr) -> chunking -> embedding ->
+indexing -> ready`, ending with real chunks in Postgres and Qdrant, each
+tagged with its section/subsection (e.g. "Troubleshooting > Unusual noise"),
+page number, and equipment metadata.
+
+## Try the sensor pipeline
+
+```bash
+docker compose run --rm backend python scripts/seed_sensor_data.py acme
+```
+
+Generates synthetic hourly sensor CSVs (`data/sensors/*.csv`, 14 days) and
+loads them for tenant `acme`. `motor_001` tells a deliberate story tied to
+the sample manual: temperature drifts upward over the last 2 days
+(developing overheating) and vibration gets 5 injected spikes crossing the
+manual's stated 4.5 mm/s guidance. Then, as any user registered in `acme`:
+
+```bash
+curl "localhost:8000/api/v1/sensors/MOTOR-001/analysis?metric=temperature&start_time=2026-08-09T00:00:00Z&end_time=2026-08-23T00:00:00Z" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+returns real trend direction/slope, statistical anomalies, threshold
+violations (with the manual citation attached), and baseline comparison —
+all computed from the actual seeded data, not canned.
 
 ## Implemented so far
 
@@ -121,9 +171,30 @@ smoothed over).
 - `ImageAnalysis` model, tenant-isolated, synchronous request/response
   (single VLM call, no async pipeline needed)
 
+**Phase 5 — Sensor Intelligence**
+- `SensorReading` model: narrow/long schema (one row per metric per
+  timestamp), maps directly onto the `query_sensor_history(equipment_id,
+  metric, start_time, end_time)` tool signature the diagnosis agent
+  (Phase 6) will use
+- Snapshot ingestion (`POST /api/v1/sensors/upload`, JSON — matches the
+  brief's real product flow) and historical CSV bulk-load via a seed
+  script (`scripts/seed_sensor_data.py`)
+- Analytics (`app/analytics/sensors.py`): trend detection (linear
+  regression, reports "stable" rather than a direction when R² is too low
+  to support one), statistical (z-score) anomaly detection as the default
+  for explainability, Isolation Forest as an opt-in ML-based alternative,
+  moving averages, baseline comparison against an equipment's own history
+- Threshold checking against the one number the project's own synthetic
+  manual actually states (vibration_rms > 4.5 mm/s) — no fabricated limits
+  for metrics the manual doesn't address
+- Live-verified against real seeded data: correctly detected the injected
+  temperature drift as an "increasing" trend, flagged the elevated
+  readings as statistical anomalies, caught all 5 injected vibration
+  spikes via both detection methods, and confirmed tenant isolation
+
 ## Not yet implemented
 
-Sensor intelligence (Phase 5) is next. See the phase plan in the project
+The diagnosis agent (Phase 6) is next. See the phase plan in the project
 brief for the full roadmap.
 
 ## Known limitations

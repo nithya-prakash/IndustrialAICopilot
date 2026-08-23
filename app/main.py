@@ -11,7 +11,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api.routes import auth, documents, health, images
+from app.api.routes import auth, documents, health, images, sensors
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
 
@@ -83,3 +83,4 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(images.router)
+app.include_router(sensors.router)

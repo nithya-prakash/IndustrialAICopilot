@@ -204,3 +204,53 @@ provider abstraction (`VISION_PROVIDER`) is built so adding one later is a
 new branch in `app/vision/analyzer.py`, not a rewrite — documented here as
 a deliberate scope cut, not an oversight.
 
+## Phase 5
+
+### Why a narrow/long `SensorReading` schema (one row per metric per timestamp) instead of one wide row per snapshot?
+The brief's tool signature is `query_sensor_history(equipment_id, metric,
+start_time, end_time)` — that maps directly onto `WHERE metric = ? AND
+recorded_at BETWEEN ? AND ?` in a narrow schema, with no per-metric column
+to add every time a new sensor type shows up. The cost is one extra JOIN-free
+row per metric per snapshot, which is irrelevant at this scale and normal
+practice for time-series data (this is exactly what a real time-series
+database like InfluxDB/TimescaleDB would model too).
+
+### Why no `Equipment` master-data table yet, despite section 20 listing one?
+`equipment_id`/`equipment_type` stayed plain indexed strings (matching the
+pattern already used on `Document` and `ImageAnalysis` since Phase 2)
+rather than introducing a referential `Equipment` table this phase. Two
+reasons: retrofitting Phase 2/4 tables to a new FK would be churn with no
+functional benefit yet, and — more importantly — a real `Equipment` table
+implies real per-equipment specs (normal operating ranges, install date,
+maintenance intervals), and fabricating those would be worse than not
+having the table. Baseline/threshold logic here instead either (a) derives
+"normal" statistically from the equipment's own historical readings
+(`compare_to_baseline`), or (b) uses the one number the project's own
+synthetic manual actually states (vibration_rms > 4.5mm/s). `Equipment`
+becomes worth adding when Phase 6's `get_maintenance_schedule` tool needs
+real schedule data to reference — deferred there, not skipped.
+
+### Why statistical (z-score) anomaly detection by default, with Isolation Forest as an explicit opt-in?
+The brief explicitly suggests "ML-based anomaly detection where
+appropriate." Both are implemented (`app/analytics/sensors.py`), but
+z-score is the default because a maintenance technician needs to act on
+*why* something was flagged — "3.7 standard deviations above this
+equipment's recent mean" is actionable and checkable; an Isolation Forest
+anomaly score is not, without more explanation. Live-tested against the
+synthetic motor data: both correctly catch all 5 injected vibration
+spikes, but Isolation Forest additionally flags several borderline
+low-vibration points a human wouldn't call anomalous — a genuine,
+observed trade-off (broader multivariate sensitivity vs. explainability),
+not just a theoretical one, which is exactly why both are offered rather
+than picking one.
+
+### Why is historical CSV bulk-loading a script, not a public upload API?
+The brief's example data (`data/sensors/motor_001.csv`) is fixture/demo
+data. In a real deployment, historical sensor data would come from a
+SCADA/historian system integration, not a technician manually uploading a
+CSV — building a public bulk-upload endpoint for a data path that
+shouldn't exist in production would be effort spent on the wrong
+abstraction. `POST /api/v1/sensors/upload` (JSON, one snapshot) matches
+the brief's actual example and the real product flow: a technician
+submitting current readings alongside a diagnosis question.
+
