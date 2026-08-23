@@ -5,7 +5,7 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 5 (Sensor Intelligence) complete.** This README will grow
+**Status: Phase 6 (Diagnosis Agent) complete.** This README will grow
 into a full portfolio writeup (architecture, evaluation results, screenshots)
 as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
 for design rationale on the choices below.
@@ -24,6 +24,10 @@ for design rationale on the choices below.
   observations with confidence + explicit uncertainty
 - **Sensor analytics**: trend detection, statistical + ML-based (Isolation
   Forest) anomaly detection, baseline comparison — `numpy`/`scikit-learn`
+- **Diagnosis agent**: Claude tool-use loop over 7 tools (search manuals,
+  sensor history, image analysis, maintenance schedule, safe calculator,
+  report generation), deterministic confidence scoring, structural
+  citation validation across all evidence types
 - **Infra**: Docker Compose, structured logging (structlog)
 
 ## Local setup
@@ -113,6 +117,29 @@ returns real trend direction/slope, statistical anomalies, threshold
 violations (with the manual citation attached), and baseline comparison —
 all computed from the actual seeded data, not canned.
 
+## Try the diagnosis agent
+
+```bash
+docker compose run --rm backend python scripts/seed_equipment_data.py acme
+```
+
+Seeds `Equipment` + `MaintenanceTask` rows for MOTOR-001/PUMP-001/CONVEYOR-001
+(some deliberately overdue). Then:
+
+```bash
+curl -X POST localhost:8000/api/v1/copilot/query \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"question":"Why is MOTOR-001 vibrating excessively?","equipment_id":"MOTOR-001","equipment_type":"electric_motor"}'
+```
+
+drives the full pipeline: creates a conversation, runs the tool-calling
+agent loop (search manuals / sensor history / maintenance schedule / image
+analysis / calculator as needed), computes confidence deterministically
+from what evidence was actually gathered, and returns a structured
+diagnosis. Without `ANTHROPIC_API_KEY` configured this returns a `200` with
+`status: "failed"` and a clear `error_message` rather than a crash — see
+Known limitations.
+
 ## Implemented so far
 
 **Phase 1 — Foundation**
@@ -192,10 +219,37 @@ all computed from the actual seeded data, not canned.
   readings as statistical anomalies, caught all 5 injected vibration
   spikes via both detection methods, and confirmed tenant isolation
 
+**Phase 6 — Diagnosis Agent**
+- Single Claude tool-use agent, 7 tools (`app/tools/`) — not a multi-agent
+  framework (see ADR)
+- `Equipment` / `MaintenanceTask` / `Conversation` / `Message` / `Diagnosis`
+  models — `Equipment` deferred since Phase 2 until this tool genuinely
+  needed real per-equipment data (see ADR)
+- Deterministic, rule-based confidence (`app/agents/confidence.py`) — never
+  the model's self-reported number; live-verified to score <0.5 with no
+  evidence and >0.5 once real evidence is gathered
+- Citation validation extended to all evidence types (documents, sensor
+  findings, image observations, maintenance records), not just documents —
+  a cited string not matching real gathered evidence is dropped and
+  flagged, never trusted
+- Severity escalation floor: objective sensor anomaly evidence overrides a
+  model claim of "low" severity to at least "medium"
+- Safe arithmetic `calculate` tool — AST-restricted, not `eval()`
+- The model-call step is injectable specifically so the loop's control
+  flow (tool dispatch, citation validation, confidence/severity, failure
+  handling, persistence) has real test coverage
+  (`tests/test_diagnosis_agent.py`) despite no API key being available
+- Live-verified against real Postgres/Qdrant/seeded data: full HTTP
+  request → auth → orchestrator → clean-failure path; multi-tool
+  orchestration (search + sensor history + maintenance schedule) against
+  real Phase 2/3/5 data; a failed diagnosis still retains the evidence and
+  tool calls gathered before the failure (a real gap found and fixed this
+  phase, not assumed correct)
+
 ## Not yet implemented
 
-The diagnosis agent (Phase 6) is next. See the phase plan in the project
-brief for the full roadmap.
+Human-in-the-loop approval (Phase 7) is next. See the phase plan in the
+project brief for the full roadmap.
 
 ## Known limitations
 
@@ -208,11 +262,16 @@ brief for the full roadmap.
 - BM25 is recomputed per query over the tenant-scoped candidate set fetched
   from Postgres rather than a persistent index — fine at portfolio scale,
   documented as a scaling limitation in the ADR.
-- Live end-to-end LLM/VLM calls (`app/rag/generation.py`,
-  `app/vision/analyzer.py`) are implemented and thoroughly tested (parsing,
-  citation validation, measurement-flagging), but have not been verified
-  against a real Anthropic call in this environment — no API key is
-  currently configured. Fails cleanly with a clear error rather than
-  crashing.
+- Live end-to-end LLM/VLM/agent calls (`app/rag/generation.py`,
+  `app/vision/analyzer.py`, `app/agents/diagnosis_agent.py`) are
+  implemented and thoroughly tested (parsing, citation validation,
+  measurement-flagging, the full multi-turn tool loop via a scripted fake
+  model), but have not been verified against a real Anthropic call in this
+  environment — no API key is currently configured. All fail cleanly with
+  a clear error rather than crashing, and that failure path is
+  live-verified end-to-end through the real HTTP layer.
 - No local VLM option (Qwen-VL/LLaVA) — the provider abstraction supports
   adding one, but it wasn't built this phase (see ADR for the trade-off).
+- Tool-calling only supports `LLM_PROVIDER=anthropic` (plain generation in
+  Phase 3 supports OpenAI-compatible too) — a scoped trade-off, not an
+  oversight (see ADR).

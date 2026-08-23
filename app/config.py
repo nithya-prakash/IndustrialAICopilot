@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # Tune based on the observed score distribution for RERANK_MODEL.
     min_relevance_score: float = -100.0
 
+    confidence_approval_threshold: float = 0.75
+    diagnosis_timeout_seconds: int = 5
+
     rate_limit_default: str = "60/minute"
 
     redis_url: str = "redis://localhost:6379/0"

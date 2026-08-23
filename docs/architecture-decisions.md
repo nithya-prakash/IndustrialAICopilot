@@ -254,3 +254,71 @@ abstraction. `POST /api/v1/sensors/upload` (JSON, one snapshot) matches
 the brief's actual example and the real product flow: a technician
 submitting current readings alongside a diagnosis question.
 
+## Phase 6
+
+### Why one agent with seven tools, not a multi-agent framework?
+The brief explicitly warns against "fake multi-agent complexity," and
+there's no task decomposition here that actually benefits from separate
+agents with separate contexts — a single Claude tool-use loop deciding
+which of seven tools to call, in what order, is the right level of
+architecture for "gather evidence, then synthesize a diagnosis." A
+framework (LangGraph, CrewAI, etc.) would add indirection without solving
+a problem this project actually has; see also the Phase 1 note on why not
+LangChain everywhere.
+
+### Why confidence is computed by a rule-based formula, not the model's self-report?
+LLMs are well known to be poorly calibrated at self-assessing certainty —
+a model will confidently say "0.9" about a guess built on zero evidence
+just as readily as about a well-supported conclusion. `app/agents/
+confidence.py` instead scores concrete, auditable signals: which evidence
+types were actually gathered, how many causes ended up with a real
+citation, whether any tool call failed. The system prompt explicitly tells
+the model not to report a confidence number at all — it's not "the model's
+number, double-checked," it's a value the model never provides in the
+first place. This is the direct mechanism behind "never present a
+low-confidence diagnosis as certain": confidence isn't asked for, it's
+calculated, live-verified to score low (<0.5) when no tools are called and
+meaningfully higher once real evidence is gathered.
+
+### How citation validation was extended from Phase 3 (documents only) to all four evidence types
+Phase 3 validated citation markers against retrieved document chunks. Here,
+every tool that returns citable evidence (documents, sensor findings,
+image observations, maintenance records) attaches a real citation string
+built from actual data — never invented by the model. The orchestrator
+accumulates these into a session-wide set as tools are called, and the
+final diagnosis JSON's `supporting_citations` are checked against that set
+directly: a citation the model wrote that doesn't match anything actually
+retrieved is dropped and flagged in `limitations`, not trusted. Same
+underlying principle as Phase 3 (verify against what was actually
+retrieved, not the model's claim), generalized from one evidence type to
+four.
+
+### Why the model-call step is factored out of the loop (an injectable `model_call` parameter)
+No ANTHROPIC_API_KEY is configured in this environment (carried over from
+Phase 3), which meant the actual multi-turn tool-calling loop — dispatch,
+citation validation, confidence scoring, persistence, failure handling —
+could not be exercised by a real API call this session. Separating "what
+does the model say" from "what do we do about it" meant that logic could
+still be thoroughly tested with a scripted fake model
+(`tests/test_diagnosis_agent.py`) rather than left unverified. When a key
+is available, only `_call_anthropic` needs checking — the loop control
+flow already has real test coverage.
+
+### Why only Anthropic is supported for tool-calling (unlike plain generation, which also supports OpenAI-compatible)
+Anthropic and OpenAI's tool/function-calling wire formats differ enough
+that supporting both properly for a multi-turn loop is real, separate work
+— and without an API key for either provider, building an OpenAI path here
+would be adding code with zero verification, not a shortcut. `LLM_PROVIDER=
+openai` raises a clear, immediate error in the agent path rather than
+silently behaving incorrectly. Documented as a scoped trade-off, not an
+oversight — plain generation (Phase 3) still supports both.
+
+### Why get_maintenance_schedule finally triggered adding the Equipment table (deferred since Phase 2)
+Every prior phase's `equipment_id`/`equipment_type` stayed plain indexed
+strings because nothing needed real per-equipment data — a lookup table
+with no real data behind it would have been premature structure. This
+tool needs actual maintenance intervals and last-performed dates to
+compute overdue status, which is real per-equipment data with no honest
+way to derive it from existing tables. That's the concrete trigger the
+earlier ADR entries said to wait for.
+
