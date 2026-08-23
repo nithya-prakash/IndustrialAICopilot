@@ -5,10 +5,96 @@ technician's question, a component photo, sensor readings, and technical
 manuals into a structured, cited diagnosis with confidence scoring and
 human-in-the-loop approval for high-risk cases.
 
-**Status: Phase 11 (CI/CD) complete.** This README will grow
-into a full portfolio writeup (architecture, evaluation results, screenshots)
-as later phases land — see [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
-for design rationale on the choices below.
+**Status: feature-complete (Phases 1–12 of the original build plan).**
+Built incrementally, phase by phase, with every phase verified live
+against real Postgres/Qdrant/Docker before moving to the next — not just
+unit tests. See [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
+for the design rationale behind every non-obvious choice below, and
+[`docs/security.md`](docs/security.md) for the security model
+specifically.
+
+## Why this exists
+
+Most "AI chatbot" portfolio projects stop at RAG. This one is built
+around a harder, more realistic brief: a technician asks a question, and
+the system has to *go gather real evidence* — search manuals, pull
+sensor history, look at a photo, check maintenance records — before it's
+allowed to say anything, and even then a low-confidence or high-severity
+conclusion has to go through a human before it's actionable. That
+constraint shapes almost every design decision here: citations are
+structurally validated against what was actually retrieved (never
+trusted from model output), confidence is computed from evidence
+signals rather than self-reported by the model, and every phase's
+completion was verified against real infrastructure, not asserted.
+
+**What it demonstrates, concretely:**
+- Hybrid RAG (dense + BM25 + reranking) with citations that can't be
+  fabricated by construction, not just by instruction
+- An agentic tool-calling loop (7 tools) with deterministic confidence
+  scoring and a full test suite that exercises the control flow via a
+  scripted model, independent of API availability
+- Multimodal input (vision + structured sensor time-series) feeding one
+  evidence pipeline
+- Human-in-the-loop approval as a first-class workflow, not a bolt-on
+- Production-adjacent infra: Prometheus/Grafana observability, an
+  evaluation harness with real measured metrics (not asserted ones), and
+  CI across backend/frontend/Docker
+
+<details>
+<summary><strong>Contents</strong></summary>
+
+- [Architecture](#architecture)
+- [Stack](#stack)
+- [Local setup](#local-setup)
+- [Running tests](#running-tests)
+- [Migrations](#migrations)
+- [Retrieval evaluation](#retrieval-evaluation)
+- [Diagnosis agent evaluation](#diagnosis-agent-evaluation)
+- [Try the document pipeline](#try-the-document-pipeline)
+- [Try the sensor pipeline](#try-the-sensor-pipeline)
+- [Try the diagnosis agent](#try-the-diagnosis-agent)
+- [Try the approval workflow](#try-the-approval-workflow)
+- [Try the frontend](#try-the-frontend)
+- [Try observability](#try-observability)
+- [Implemented so far](#implemented-so-far) (phase-by-phase build log)
+- [Possible next steps](#possible-next-steps)
+- [Known limitations](#known-limitations)
+
+</details>
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User(["Technician / Supervisor / Admin"]) --> FE["React SPA"]
+    FE -- "REST + JWT" --> API["FastAPI backend"]
+
+    API --> PG[("PostgreSQL")]
+    API --> QD[("Qdrant")]
+    API -- enqueue --> RD[("Redis")]
+    RD --> WK["Celery worker"]
+    WK -- "extract / chunk / embed" --> PG
+    WK --> QD
+
+    API --> AG["Diagnosis agent"]
+    AG -- "tool calls" --> TL["search docs · sensor history<br/>image analysis · maintenance<br/>calculator · report gen"]
+    TL --> PG
+    TL --> QD
+    AG -- "chat completion" --> LLM[["Anthropic / OpenAI"]]
+
+    API -- "/metrics" --> PR["Prometheus"]
+    PR --> GF["Grafana"]
+```
+
+Request flow for a diagnosis: the frontend calls `POST /copilot/query`
+with a JWT; the backend hands the question to the diagnosis agent, which
+decides which tools it needs (it doesn't call all seven on every
+request); each tool call is scoped to the caller's own tenant and
+returns real citations from Postgres/Qdrant; the agent's final answer is
+validated against those citations before being persisted — anything it
+claims that isn't backed by a real tool result is dropped, not shown.
+See [Try the diagnosis agent](#try-the-diagnosis-agent) below to run this
+end to end.
 
 ## Stack
 
@@ -506,9 +592,43 @@ interval.
   `package.json`, and its YAML was syntax-validated — what's unverified
   is specifically whether it goes green on GitHub
 
-## Not yet implemented
+**Phase 12 — Final Polish**
+- [`docs/security.md`](docs/security.md): a consolidated security model
+  doc, fulfilling a promise the Phase 3 ADR entry made and left
+  unfulfilled through Phase 11 (caught while surveying the repo for this
+  phase) — every claim in it cites the specific file/mechanism that
+  backs it, written entirely from code that already existed and was
+  already tested by this point
+- `LICENSE` (MIT) added
+- README restructured for a first-time reader: a "Why this exists"
+  framing section, a Mermaid architecture diagram (chosen over
+  screenshots — no tooling path from a captured screenshot to a
+  committable image file this session; see ADR), and a collapsible table
+  of contents given the file's length
+- Cleaned up leftover Vite-scaffold defaults never touched since Phase 8
+  (`frontend/package.json`'s placeholder name/version, `frontend/
+  package-lock.json` resynced to match, `frontend/README.md` replaced —
+  it was still the unedited Vite template README)
+- Re-verified clean: `ruff check .` and the full 222-test suite pass
+  against the final state; `npm run build`/`npm run lint` pass on the
+  frontend
 
-Final polish (Phase 12) is next — the last phase in the original roadmap.
+## Possible next steps
+
+Everything in the original 12-phase build plan is complete. Genuine
+extensions this project could reasonably grow into, not commitments:
+
+- Streaming the diagnosis agent's progress to the frontend (SSE/WebSocket)
+  instead of one request/response round trip, so a technician sees
+  "checking sensor history…" rather than a blank wait
+- Multi-turn refinement of an existing diagnosis (the `Conversation` model
+  already supports follow-up messages; the agent loop doesn't yet reuse
+  prior evidence when a technician asks a clarifying follow-up)
+- Kubernetes manifests alongside the current Docker Compose setup, for a
+  more realistic path to a multi-node deployment
+- A real LLM-as-judge evaluation pass once there's an API budget to
+  verify a judge model's own reliability against — deliberately not
+  attempted in Phase 10 without that (see the ADR entry on why)
 
 ## Known limitations
 

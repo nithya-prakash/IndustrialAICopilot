@@ -1,32 +1,31 @@
-# React + TypeScript + Vite
+# Industrial Copilot — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + Vite + TypeScript SPA for the
+[Industrial Multimodal AI Copilot](../README.md) — see the project root
+README for what this application does, the full stack, and how to run it
+(`docker compose up --build frontend`, or `npm install && npm run dev`
+for local hot-reload development).
 
-Currently, two official plugins are available:
+## Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `src/api/` — typed client wrappers around every backend endpoint
+- `src/context/AuthContext.tsx` — the one piece of genuinely global client
+  state (JWT + current user); everything else is server state fetched
+  per-page
+- `src/components/` — shared UI (badges, layout, route guards, the
+  diagnosis/evidence view reused across pages)
+- `src/pages/` — one file per route (Dashboard, Knowledge Base, AI
+  Copilot, Approvals, Diagnosis Detail, Audit Log, Login/Register)
+- `src/index.css` — the hand-rolled design system (CSS custom properties
+  + utility classes) — see the root
+  [`docs/architecture-decisions.md`](../docs/architecture-decisions.md)
+  for why this isn't a UI framework
 
-## React Compiler
+## Scripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm run dev      # Vite dev server with HMR
+npm run build    # tsc -b && vite build
+npm run lint     # oxlint
+npm run preview  # preview a production build locally
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
