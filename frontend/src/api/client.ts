@@ -9,6 +9,33 @@ export class ApiError extends Error {
   }
 }
 
+interface FastApiValidationError {
+  loc?: unknown[];
+  msg?: string;
+}
+
+/** FastAPI's `detail` is either a plain string (most of this app's own
+ * HTTPException raises) or, for a 422 from Pydantic's own request
+ * validation, an array of {loc, msg, ...} objects — dumping that array
+ * through JSON.stringify is what produced raw, unreadable JSON in the UI
+ * (e.g. registering with a username containing a space). Extracts a
+ * human-readable message for either shape. */
+function extractErrorDetail(detail: unknown): string | null {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const messages = (detail as FastApiValidationError[])
+      .map((e) => {
+        const field = Array.isArray(e.loc) ? e.loc[e.loc.length - 1] : undefined;
+        return field && e.msg ? `${field}: ${e.msg}` : e.msg;
+      })
+      .filter((m): m is string => Boolean(m));
+    return messages.length ? messages.join("; ") : null;
+  }
+  return detail ? JSON.stringify(detail) : null;
+}
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
@@ -69,7 +96,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     let detail = response.statusText;
     try {
       const data = await response.json();
-      detail = data.detail ? JSON.stringify(data.detail) : detail;
+      detail = extractErrorDetail(data.detail) ?? detail;
     } catch {
       // response wasn't JSON — keep statusText
     }

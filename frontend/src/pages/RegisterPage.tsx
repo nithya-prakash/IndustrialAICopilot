@@ -39,7 +39,18 @@ export function RegisterPage() {
         {error && <div className="error-banner">{error}</div>}
         <div className="field">
           <label>Username</label>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            pattern="[a-zA-Z0-9_.\-]+"
+            minLength={3}
+            maxLength={64}
+            title="Letters, numbers, underscores, dots, and hyphens only — no spaces"
+            required
+          />
+          <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+            Letters, numbers, underscores, dots, and hyphens only — no spaces
+          </span>
         </div>
         <div className="field">
           <label>Email</label>
