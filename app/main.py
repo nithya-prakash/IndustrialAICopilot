@@ -11,7 +11,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api.routes import auth, health
+from app.api.routes import auth, documents, health
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
 
@@ -81,3 +81,4 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router)
+app.include_router(documents.router)

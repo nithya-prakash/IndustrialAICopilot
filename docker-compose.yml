@@ -30,6 +30,17 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -42,6 +53,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-copilot}:${POSTGRES_PASSWORD:-copilot}@postgres:5432/${POSTGRES_DB:-industrial_copilot}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     depends_on:
@@ -49,11 +61,50 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
+      - hf_cache:/home/appuser/.cache/huggingface
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: industrial-copilot-app:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-copilot}:${POSTGRES_PASSWORD:-copilot}@postgres:5432/${POSTGRES_DB:-industrial_copilot}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - hf_cache:/home/appuser/.cache/huggingface
+    # The Dockerfile's HEALTHCHECK curls localhost:8000/api/v1/health, but
+    # this service runs the Celery worker, not the HTTP server — it would
+    # never have anything listening on that port. Use a real Celery
+    # liveness check instead of inheriting a check that can't pass.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
 
 volumes:
   postgres_data:
   qdrant_storage:
+  hf_cache:
