@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.core.rate_limit import limiter
 from app.database import Base, get_db
 from app.main import app
 
@@ -33,6 +34,12 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield db_session
 
     app.dependency_overrides[get_db] = _override_get_db
+    # The rate limiter's storage is a module-level singleton
+    # (app/core/rate_limit.py) that outlives any single test — reset it per
+    # test so one test's request volume can't spuriously 429 a later,
+    # unrelated test. Tests that specifically want to exercise the limit
+    # (tests/test_rate_limit.py) do their own counting within one test.
+    limiter.reset()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

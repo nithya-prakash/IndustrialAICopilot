@@ -64,11 +64,20 @@ async def list_conversations(
 
 
 async def get_conversation(
-    db: AsyncSession, *, conversation_id: uuid.UUID, tenant_id: str
+    db: AsyncSession, *, conversation_id: uuid.UUID, tenant_id: str, user_id: uuid.UUID
 ) -> Conversation | None:
+    """Scoped by user_id, not just tenant_id — matching list_conversations
+    above. A conversation is a private diagnostic thread for the technician
+    who started it, not a tenant-wide shared board; without this, any user
+    in the tenant who learned another user's conversation_id (e.g. from a
+    shared link or log line) could read their full diagnostic history."""
     result = await db.execute(
         select(Conversation)
         .options(selectinload(Conversation.messages))
-        .where(Conversation.id == conversation_id, Conversation.tenant_id == tenant_id)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.tenant_id == tenant_id,
+            Conversation.user_id == user_id,
+        )
     )
     return result.scalar_one_or_none()

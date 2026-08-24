@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.core.filenames import sanitize_display_filename
 from app.models.document import Document, DocumentChunk, DocumentStatus, DocumentVersion
 from app.rag.qdrant_store import delete_by_document_version, set_current_flag
 from app.services.audit_service import log_event
@@ -112,7 +113,7 @@ async def create_document_version(
         document = Document(
             tenant_id=tenant_id,
             owner_id=owner_id,
-            original_filename=filename,
+            original_filename=sanitize_display_filename(filename),
             equipment_type=equipment_type,
             equipment_id=equipment_id,
         )

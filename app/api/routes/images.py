@@ -1,9 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.deps import get_current_user
+from app.core.rate_limit import limiter
 from app.database import get_db
 from app.models.image_analysis import ImageAnalysis
 from app.models.user import User
@@ -17,6 +19,7 @@ from app.services.image_service import (
 from app.vision.preprocessing import InvalidImageError
 
 router = APIRouter(prefix="/api/v1/images", tags=["images"])
+_settings = get_settings()
 
 
 def _to_response(record: ImageAnalysis) -> ImageAnalysisResponse:
@@ -37,7 +40,9 @@ def _to_response(record: ImageAnalysis) -> ImageAnalysisResponse:
 @router.post(
     "/analyze", response_model=ImageAnalysisResponse, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit(_settings.rate_limit_ai)
 async def analyze(
+    request: Request,
     file: UploadFile = File(...),
     equipment_type: str | None = Form(default=None),
     equipment_id: str | None = Form(default=None),

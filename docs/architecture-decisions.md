@@ -138,11 +138,29 @@ cite by index (`[1]`, `[2]`), not to reproduce citation text itself. Every
 `[N]` marker in the model's output is checked against the actual number of
 retrieved sources: in range -> resolved to that chunk's real
 filename/section/page (`RetrievedChunk.citation`, built from the database,
-never from the model); out of range -> flagged as an invalid marker and
-dropped, not silently kept. This makes fabricated citations structurally
-close to impossible rather than something caught by a post-hoc string
-match against known document names — see `app/rag/generation.py` and
-`tests/test_citations.py`.
+never from the model) — this made fabricated citations structurally close
+to impossible rather than something caught by a post-hoc string match
+against known document names.
+
+**Superseded by the Phase 6 agent** (see the fix-pass audit entry below):
+the diagnosis agent's tool-calling design generates citations differently —
+each tool call attaches real citation strings to its result (built from
+actual DB/analytics data — see `app/tools/executor.py`), the loop
+accumulates every citation actually returned across all tool calls into a
+session-wide `set[str]`, and the model's final `supporting_citations` are
+checked against that set (`app/agents/diagnosis_agent.py:_validate_causes`)
+— any citation the model states that doesn't match a real gathered result
+is dropped, not trusted. Same principle (verify against what was actually
+retrieved, don't trust a string match), different mechanism (set
+membership against real tool results, not index-into-a-numbered-list) —
+required because the agent's evidence spans four types (documents,
+sensors, images, maintenance records), not just document chunks, and
+citations are gathered incrementally across a multi-turn tool loop rather
+than handed to the model as one fixed numbered list up front. The
+now-superseded `[1]`/`[2]`-marker implementation in `app/rag/generation.py`
+had zero production callers by this point and was removed as dead code
+during the fix pass (see the audit entry below); `app/rag/generation.py`
+now holds the live `call_model` step instead.
 
 ### How prompt injection from a malicious/compromised manual is defended against
 Retrieved chunk content is untrusted data — the system prompt explicitly
@@ -155,10 +173,22 @@ could otherwise try to trigger unintended tool calls.
 
 ### Why configurable LLM_PROVIDER (Anthropic default, OpenAI-compatible fallback) reused from generation into the future agent?
 Same rationale as the vision provider in Phase 1: local development must
-not require a paid key. `LLM_PROVIDER=openai` with `LLM_BASE_URL` pointed
-at a local Ollama server is a one-line config change to run entirely
-without any API key — the call sites (`app/llm/client.py`) never need to
-know which backend is actually serving the request.
+not require a paid key. At the time this was written, `LLM_PROVIDER=openai`
+with `LLM_BASE_URL` pointed at a local Ollama server was a one-line config
+change to run entirely without any API key, via the provider-agnostic
+`chat_completion` helper in `app/llm/client.py`.
+
+**Correction (fix pass, see the entry below)**: that helper was
+plain-text-only and had no tool-calling support, so when Phase 6 built the
+actual agent it could not use it — the agent needs the raw Anthropic
+`tools=` request shape, so `call_model` (`app/rag/generation.py`) talks to
+the Anthropic SDK directly and explicitly rejects any `LLM_PROVIDER` other
+than `"anthropic"`. `chat_completion`'s only caller (the now-removed
+`generate_answer`) was deleted as dead code, and the function went with it.
+`LLM_PROVIDER=openai`/local-Ollama is therefore **not currently a working
+path for the diagnosis agent** — this is a known, documented limitation,
+not a hidden one. The vision pipeline's own `VISION_PROVIDER` setting is
+separate and does still support both Anthropic and OpenAI.
 
 ## Phase 4
 
@@ -493,3 +523,183 @@ The first real GitHub Actions run (right after pushing) failed exactly this way:
 
 ### Why split the phase-by-phase build log out of the README into `docs/implementation-log.md`?
 The README had grown to roughly 660 lines, the large majority of it the "Implemented so far" section's twelve phase-by-phase bullet blocks — real content, but it buried the parts a first-time visitor actually needs first (what this is, how to run it, the architecture). Moved verbatim into its own file, with the phase-number heading prefixes (`Phase 1 — Foundation`, etc.) dropped in favor of just the area name (`Foundation`) — the numbering mattered while phases were still in progress and being verified one at a time; once the build is finished, "Foundation" is what the section actually is, and "Phase 1" is an implementation-order detail more relevant to the git history and this ADR than to a reader trying to understand what the system does. The README now links to it as a single short section rather than inlining it. Inline `Phase N` references *within* prose elsewhere (this ADR's own organization, and a few scattered cross-references in the README/implementation log) were left as-is — those carry real sequencing information (e.g. "Equipment deferred until this tool needed it"), unlike the section headers, which were purely chronological labels.
+
+## Fix Pass (post-Phase-12 audit)
+
+A full read-only audit of the finished 12-phase MVP (see `docs/security.md`
+and this file's own entries for what was already verified) surfaced four
+categories of real, verified gaps: rate limiting was configured but never
+enforced on any route; a dead RAG-generation implementation coexisted with
+the diagnosis agent's live one; the AI pipeline's test coverage skipped the
+happy path for vision and had no retry/backoff for transient provider
+failures; and a few smaller correctness/security items (filename display,
+conversation cross-user scoping, a bounded-memory gap) were found in
+passing. This section documents the fixes, in the same why-not-just-what
+style as the rest of this log.
+
+### Why was rate limiting configured but not enforced, and how was that actually fixed (not just re-configured)?
+`app/main.py` registered `app.state.limiter` and a `RateLimitExceeded`
+exception handler, which looks like enforcement but isn't — slowapi only
+rate-limits a route that carries its own `@limiter.limit(...)` decorator;
+nothing in the codebase had one. The fix is a shared `app/core/rate_limit.py`
+module (a separate file specifically to avoid a circular import: route
+modules need to import the `Limiter` instance, and `app/main.py` imports
+every route module to register its router) plus four explicit decorators —
+auth register/login, document upload, image analyze, copilot query — each
+with its own configurable limit (`RATE_LIMIT_AUTH`/`_UPLOAD`/`_AI`). Verified
+two ways, not just by reading the code: `tests/test_rate_limit.py` drives
+real request sequences through the test client past each limit and asserts
+the 429, and a live `curl` loop against the actually-running Docker
+container confirmed the same 429-at-the-configured-threshold behavior
+outside the test suite. A `limiter.reset()` was added to the `client`
+fixture (`tests/conftest.py`) — slowapi's in-memory limiter state is a
+module-level singleton that otherwise persists across the whole pytest
+process, which would have made unrelated tests spuriously fail once limits
+were actually enforced.
+
+### Why keep `app/rag/generation.py` at all, rather than deleting it once its dead functions were removed?
+The file's `generate_answer`/`_format_sources`/index-marker citation parser
+had zero production callers by the time of the audit (confirmed by
+repo-wide grep) — a leftover single-shot-QA design superseded by the
+Phase 6 agent's own inline Anthropic call in `diagnosis_agent.py`, which
+had grown its own `_call_anthropic`/`_call_model`/`ModelTurn`/`ModelToolCall`
+directly inside the agent module. Rather than just deleting the dead code
+and leaving the live LLM-call step embedded in the agent loop, it was moved
+into this file (renamed to `call_model`) — this literally realizes "one
+canonical generation service the agent calls into" using the *real* live
+implementation, instead of leaving a now-empty module or, worse, force-
+fitting the dead index-marker citation design into the agent's actual
+string-set citation validation (which would have been a real architecture
+change to a system already working correctly, not a cleanup). Verified via
+repo-wide search afterward that exactly one `ModelTurn`/`ModelToolCall`
+definition and one model-call implementation exist. A second, unplanned
+consequence of this move: `app/llm/client.py`'s provider-agnostic
+`chat_completion` helper turned out to have no callers left either once
+`generate_answer` was gone (it was never used by the agent — see the
+Phase 3 LLM_PROVIDER correction above) — trimmed to just the shared
+`LLMError` exception type, which both `app/rag/generation.py` and
+`app/vision/analyzer.py` still raise/catch.
+
+### Why does retry/backoff wrap only the single external call, and why exclude some Qdrant call sites?
+`app/core/retry.py`'s `call_with_retry`/`call_with_retry_sync` wrap just
+the raw SDK call (`client.messages.create(...)`, `client.query_points(...)`),
+not the surrounding function — retrying a parsing bug by mistake (if the
+whole function were wrapped and a bug lived in response-parsing code) would
+silently turn a real defect into a slow, pointless retry loop instead of a
+clear, immediate failure. Retryable errors are an explicit allowlist
+(`is_transient_llm_error`/`is_transient_qdrant_error`) — timeouts,
+connection errors, rate limits, and 5xx — never auth/validation/malformed-
+request errors, which retrying cannot fix. Applied to the diagnosis agent's
+LLM call, both vision providers, and Qdrant's read path (`search`, on the
+critical per-diagnosis-query path) plus the two ingestion-time Qdrant
+writes (`ensure_collection`, `upsert_chunks`) — those two are safe to retry
+because retrying the *same* upsert call with the *same* point_ids is
+idempotent. Deliberately NOT extended to a Celery-task-level retry on
+`ingestion.process_document_version` (`max_retries` stays `0`, with the
+reasoning recorded directly in `app/tasks/ingestion_tasks.py`): that
+function generates a fresh `uuid4()` point_id and `DocumentChunk` row per
+chunk on every invocation, so a whole-task retry after a partial success
+(Qdrant write succeeded, then the process died before the Postgres commit)
+would insert a *second*, duplicate set of chunks rather than safely
+repeating the first attempt — making it retry-safe would need deterministic
+point IDs or a delete-before-insert step, a real change to the ingestion
+write path, not something to bolt on alongside a retry fix.
+
+### Why does exhausting retries now raise a wrapped `LLMError`/`VisionError` instead of the raw SDK exception?
+Before this fix, only the two *deliberate* domain errors (no API key
+configured; the model returned unparseable JSON) were caught by
+`run_diagnosis`'s `except (LLMError, AgentError)` and
+`analyze_uploaded_image`'s `except VisionError` — a raw
+`anthropic.APITimeoutError` from the SDK call itself was never caught by
+either handler and would have propagated as an unhandled exception (a bare
+500, not a clean "failed" record with a real error message), both before
+*and* after retries were added — retrying doesn't change what happens on
+final exhaustion, just how many attempts happen first. Wrapping the final
+exception (message preserved, `raise ... from exc`) at the same two call
+sites that added retry closes this gap with no separate new code path: a
+provider outage after retries are exhausted now produces the exact same
+graceful "failed" diagnosis/image-analysis record as a malformed-JSON
+response always has, instead of two different failure UX depending on
+*which* provider error occurred. Covered by
+`tests/test_retry.py::test_vision_analyze_image_final_error_after_exhausted_retries`
+and the HTTP-level equivalent in `tests/test_vision_integration_mocked.py`.
+
+### Why does the mocked VLM/E2E test suite mock the Anthropic SDK client class, not the analyzer/agent functions themselves?
+The audit's own instruction for the VLM test ("don't mock the whole
+analyzer, only the provider call") generalizes to every AI-pipeline test
+added in this pass: `tests/test_vision_integration_mocked.py` and
+`tests/test_e2e_diagnosis_pipeline_mocked.py` both monkeypatch
+`anthropic.AsyncAnthropic` itself (a fake class whose `messages.create`
+returns scripted responses, routing by whether `tools=` was passed, since
+the vision call and the agent's tool-calling call share this one SDK entry
+point) — everything above that boundary (HTTP routes, upload validation,
+preprocessing, response parsing, DB persistence, citation validation,
+confidence/severity computation, the approval workflow, audit logging) runs
+for real. The E2E test goes one step further for hybrid RAG specifically:
+only the Qdrant *dense* leg (`app.rag.retrieval.qdrant_dense_search`) is
+mocked (returns no hits) — real BM25 retrieval, real RRF fusion, and the
+real local cross-encoder reranker all run against chunks seeded directly
+into the (SQLite, test-isolated) Postgres fixture, rather than mocking
+`hybrid_search` wholesale. This surfaced a genuine subtlety worth recording:
+BM25's IDF formula (`log((N - freq + 0.5) / (freq + 0.5))`) is exactly zero
+when a query term appears in exactly 1 of 2 corpus documents — a real
+keyword match against a single-chunk or two-chunk fixture silently scores
+`<= 0` and gets filtered out by `app/rag/bm25.py`'s `score > 0` keep
+condition. The E2E fixture needed a *third*, topically distinct chunk
+before the target term's IDF went positive — not a bug in the retrieval
+code, an inherent property of BM25 over a near-empty corpus that a fixture
+with too few documents would silently mask.
+
+### Why sanitize the *displayed* filename at the point of storage into `Document.original_filename`, rather than at each display site?
+Path-traversal was never actually exploitable — uploaded files are always
+written under a UUID-based path (`f"{version_id}.pdf"`,
+`app/services/document_service.py`), so a malicious client filename could
+never become a filesystem path. `app/core/filenames.py:sanitize_display_filename`
+is a second, independent layer: it strips directory components (both POSIX
+and Windows separator styles), control characters, and filesystem-reserved
+characters from `original_filename` *before* it's stored, so every
+downstream consumer (API responses, the frontend, PDF diagnostic reports,
+logs) automatically gets a clean value without each one needing to
+remember to sanitize it separately — a single choke point instead of a
+policy to repeat at every render site. Deliberately not an ASCII-only
+allowlist: accented characters and non-Latin scripts are legitimate in real
+filenames, so the filter is a blocklist (control chars, path separators,
+`<>:"|?*`) rather than an allowlist that would have mangled them.
+
+### Why does a conversation's existing-thread lookup now filter by `user_id`, not just `tenant_id`?
+Found in passing while adding bounded conversation memory (below), not
+flagged by the original audit: `_get_or_create_conversation`'s reuse
+lookup, and `get_conversation`'s detail-view lookup, both filtered only by
+`tenant_id` — meaning any user in the tenant who learned another user's
+`conversation_id` (a UUID, but not literally unguessable — e.g. leaked via
+a shared link or a log line) could read that conversation's full message
+history, and passing it into `run_diagnosis` would have silently attached
+a new diagnosis to a thread that wasn't the caller's. `list_conversations`
+was already scoped by `user_id` — this was an inconsistency between the
+list and detail paths, not an intentional shared-thread design. Both now
+filter by `user_id` too; a mismatched user creates a fresh conversation
+instead of reusing someone else's. This became a materially bigger deal
+once conversation memory (below) started actually feeding prior message
+content back into the model — previously the gap was "you could view
+someone else's diagnosis," now it would also have been "your follow-up
+question's context could get contaminated with another user's thread."
+
+### Why fold prior context into the current turn's single initial message, instead of replaying the previous run's raw tool-calling messages?
+Before this pass, a `conversation_id` was purely a grouping/UI-threading
+mechanism — the model received zero memory of prior turns even when
+reusing an existing conversation; `_build_initial_message` always started
+from a single fresh user message. The fix
+(`app/agents/diagnosis_agent.py:_fetch_recent_context`) is bounded (last 6
+messages = 3 Q&A exchanges, each capped at 1000 characters) and reads back
+as plain text folded into *this* turn's one initial message, explicitly
+labeled "background only... NOT verified evidence for this diagnosis" —
+not a replay of the previous `run_diagnosis` call's raw multi-turn
+`tool_use`/`tool_result` message array, which would have referenced
+`tool_use_id`s that don't exist in this fresh model conversation and would
+be invalid to send. The explicit "not evidence" framing matters for the
+same reason citations are validated against real gathered evidence
+elsewhere in this project: without it, the model could cite a *prior*
+diagnosis's conclusion as if it were freshly verified support for a new
+`possible_causes[].supporting_citations` entry, silently bypassing
+`_validate_causes`'s guarantee that every citation matches something
+actually retrieved in the current run.

@@ -8,9 +8,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api.routes import (
     audit,
@@ -24,11 +23,15 @@ from app.api.routes import (
     sensors,
 )
 from app.config import get_settings
+from app.core.rate_limit import limiter
 from app.logging_config import configure_logging, get_logger
-from app.observability.metrics import http_request_duration_seconds, http_requests_total
+from app.observability.metrics import (
+    http_request_duration_seconds,
+    http_requests_total,
+    rate_limit_exceeded_total,
+)
 
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit_default])
 
 
 @asynccontextmanager
@@ -46,7 +49,14 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Response:
+    route = request.scope.get("route")
+    path_label = getattr(route, "path", None) or "unmatched"
+    rate_limit_exceeded_total.labels(path=path_label).inc()
+    return _rate_limit_exceeded_handler(request, exc)
 
 app.add_middleware(
     CORSMiddleware,

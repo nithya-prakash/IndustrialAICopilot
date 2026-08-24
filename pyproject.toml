@@ -5,6 +5,7 @@ testpaths = ["tests"]
 markers = [
     "integration: tests that require real Postgres/Qdrant (run via docker compose)",
     "e2e: end-to-end tests exercising the full diagnosis pipeline",
+    "live: tests that make a real, billed call to an external AI provider — see tests/live/",
 ]
 
 [tool.ruff]

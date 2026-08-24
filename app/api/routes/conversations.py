@@ -37,7 +37,7 @@ async def get_one(
     db: AsyncSession = Depends(get_db),
 ) -> ConversationDetailResponse:
     conversation = await get_conversation(
-        db, conversation_id=conversation_id, tenant_id=user.tenant_id
+        db, conversation_id=conversation_id, tenant_id=user.tenant_id, user_id=user.id
     )
     if conversation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")

@@ -143,6 +143,32 @@ async def test_conversations_list_and_get_isolated_by_tenant(client: AsyncClient
     assert detail_b.status_code == 404
 
 
+async def test_conversation_detail_isolated_across_users_in_same_tenant(
+    client: AsyncClient,
+) -> None:
+    """A conversation is a private thread for the user who started it — a
+    different user in the SAME tenant must not be able to read it by
+    passing/guessing its conversation_id."""
+    token_a = await _register(client, "tech_a", "acme")
+    token_c = await _register(client, "tech_c", "acme")
+
+    create = await client.post(
+        "/api/v1/copilot/query",
+        headers={"Authorization": f"Bearer {token_a}"},
+        json={"question": "test question"},
+    )
+    conversation_id = create.json()["conversation_id"]
+
+    same_user = await client.get(
+        f"/api/v1/conversations/{conversation_id}", headers={"Authorization": f"Bearer {token_a}"}
+    )
+    other_user_same_tenant = await client.get(
+        f"/api/v1/conversations/{conversation_id}", headers={"Authorization": f"Bearer {token_c}"}
+    )
+    assert same_user.status_code == 200
+    assert other_user_same_tenant.status_code == 404
+
+
 async def test_conversation_not_found_returns_404(client: AsyncClient) -> None:
     import uuid
 

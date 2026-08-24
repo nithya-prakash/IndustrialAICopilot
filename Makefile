@@ -1,4 +1,4 @@
-.PHONY: up down build logs test lint migrate revision shell eval eval-diagnosis
+.PHONY: up down build logs test test-live lint migrate revision shell eval eval-diagnosis
 
 up:
 	docker compose up --build
@@ -14,6 +14,9 @@ logs:
 
 test:
 	docker compose run --rm backend pytest -q
+
+test-live:
+	docker compose run --rm backend pytest tests/live -v
 
 lint:
 	docker compose run --rm backend ruff check .

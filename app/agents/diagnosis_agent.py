@@ -2,17 +2,16 @@
 
 Deliberately a single agent with seven tools, not a multi-agent framework
 (see docs/architecture-decisions.md: "why not a multi-agent architecture
-everywhere"). The model-call step (`_call_model`) is factored out from the
-loop control flow specifically so the loop itself — multi-turn tool
-dispatch, citation validation against actually-gathered evidence,
-confidence/severity computation, persistence — is unit-testable by
-injecting a fake model function, without needing a real LLM call. See
-tests/test_diagnosis_agent.py.
+everywhere"). The model-call step (`call_model`, in app/rag/generation.py —
+the agent's generation service) is factored out from the loop control flow
+specifically so the loop itself — multi-turn tool dispatch, citation
+validation against actually-gathered evidence, confidence/severity
+computation, persistence — is unit-testable by injecting a fake model
+function, without needing a real LLM call. See tests/test_diagnosis_agent.py.
 """
 import json
 import time
 import uuid
-from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,10 +27,9 @@ from app.observability.metrics import (
     agent_tool_calls_total,
     diagnoses_total,
     diagnosis_confidence,
-    record_llm_call,
 )
+from app.rag.generation import call_model
 from app.services.audit_service import log_event
-from app.tools.definitions import TOOL_DEFINITIONS
 from app.tools.executor import ToolContext, ToolExecutionResult, execute_tool
 
 MAX_ITERATIONS = 6
@@ -70,74 +68,6 @@ class AgentError(Exception):
     pass
 
 
-@dataclass
-class ModelToolCall:
-    id: str
-    name: str
-    input: dict
-
-
-@dataclass
-class ModelTurn:
-    stop_reason: str  # "tool_use" | "end_turn" | anything else counts as end_turn
-    text: str = ""
-    tool_calls: list[ModelToolCall] = field(default_factory=list)
-
-
-async def _call_anthropic(messages: list[dict], system: str) -> ModelTurn:
-    settings = get_settings()
-    if not settings.resolved_llm_api_key:
-        raise LLMError("No Anthropic API key configured (set ANTHROPIC_API_KEY or LLM_API_KEY)")
-
-    import anthropic
-
-    client = anthropic.AsyncAnthropic(api_key=settings.resolved_llm_api_key)
-    start = time.perf_counter()
-    try:
-        response = await client.messages.create(
-            model=settings.llm_model,
-            max_tokens=2048,
-            system=system,
-            messages=messages,
-            tools=TOOL_DEFINITIONS,
-        )
-    except Exception:
-        record_llm_call(
-            provider="anthropic",
-            model=settings.llm_model,
-            operation="agent",
-            status="error",
-            duration_seconds=time.perf_counter() - start,
-        )
-        raise
-    record_llm_call(
-        provider="anthropic",
-        model=settings.llm_model,
-        operation="agent",
-        status="success",
-        duration_seconds=time.perf_counter() - start,
-        input_tokens=response.usage.input_tokens,
-        output_tokens=response.usage.output_tokens,
-    )
-    text = "".join(block.text for block in response.content if block.type == "text")
-    tool_calls = [
-        ModelToolCall(id=block.id, name=block.name, input=block.input)
-        for block in response.content
-        if block.type == "tool_use"
-    ]
-    return ModelTurn(stop_reason=response.stop_reason, text=text, tool_calls=tool_calls)
-
-
-async def _call_model(messages: list[dict], system: str) -> ModelTurn:
-    settings = get_settings()
-    if settings.llm_provider != "anthropic":
-        raise LLMError(
-            f"Agent tool-calling currently only supports LLM_PROVIDER=anthropic "
-            f"(got {settings.llm_provider!r})"
-        )
-    return await _call_anthropic(messages, system)
-
-
 def _build_initial_message(
     *,
     question: str,
@@ -145,8 +75,21 @@ def _build_initial_message(
     equipment_type: str | None,
     image_analysis_id: uuid.UUID | None,
     sensor_snapshot: dict[str, float] | None,
+    prior_context: list[tuple[str, str]] | None = None,
 ) -> str:
-    parts = [f"Technician question: {question}"]
+    parts = []
+    if prior_context:
+        parts.append(
+            "Prior conversation context (background only, for a follow-up question in "
+            "the same thread — this is NOT verified evidence for this diagnosis; "
+            "re-gather anything relevant via tools before citing it):"
+        )
+        for role, content in prior_context:
+            speaker = "Technician" if role == "user" else "Assistant"
+            parts.append(f"{speaker}: {content}")
+        parts.append("")
+
+    parts.append(f"Technician question: {question}")
     if equipment_id:
         parts.append(f"Equipment ID: {equipment_id}")
     if equipment_type:
@@ -213,9 +156,16 @@ async def _get_or_create_conversation(
     question: str,
 ) -> Conversation:
     if conversation_id is not None:
+        # Scoped by user_id too, not just tenant_id — a conversation is a
+        # private diagnostic thread for the technician who started it. Without
+        # this, passing another user's conversation_id would silently attach
+        # this new diagnosis (and, via _fetch_recent_context below, that
+        # user's prior Q&A) to a thread that isn't the caller's.
         result = await db.execute(
             select(Conversation).where(
-                Conversation.id == conversation_id, Conversation.tenant_id == tenant_id
+                Conversation.id == conversation_id,
+                Conversation.tenant_id == tenant_id,
+                Conversation.user_id == user_id,
             )
         )
         existing = result.scalar_one_or_none()
@@ -228,6 +178,33 @@ async def _get_or_create_conversation(
     db.add(conversation)
     await db.flush()
     return conversation
+
+
+MAX_PRIOR_CONTEXT_MESSAGES = 6  # last 3 Q&A exchanges — a bounded window, not full history
+MAX_PRIOR_MESSAGE_CHARS = 1000  # caps any single long prior answer from dominating the prompt
+
+
+async def _fetch_recent_context(
+    db: AsyncSession, conversation_id: uuid.UUID
+) -> list[tuple[str, str]]:
+    """Bounded prior-turn context for follow-up questions within the same
+    conversation. Deliberately NOT the raw multi-turn tool-calling message
+    array from a previous run_diagnosis call — those reference tool_use_ids
+    that don't exist in a fresh model conversation and would be invalid to
+    replay. Instead, a plain-text summary of what was asked/concluded
+    before, folded into this turn's single initial message (see
+    _build_initial_message) and explicitly labeled as background context,
+    not evidence — the model must still gather fresh evidence via tools for
+    anything it cites in *this* diagnosis."""
+    result = await db.execute(
+        select(Message.role, Message.content)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(MAX_PRIOR_CONTEXT_MESSAGES)
+    )
+    rows = list(result.all())
+    rows.reverse()
+    return [(role.value, content[:MAX_PRIOR_MESSAGE_CHARS]) for role, content in rows]
 
 
 async def _persist_failed_diagnosis(
@@ -296,7 +273,7 @@ async def run_diagnosis(
     equipment_type: str | None = None,
     image_analysis_id: uuid.UUID | None = None,
     sensor_snapshot: dict[str, float] | None = None,
-    model_call=_call_model,
+    model_call=call_model,
 ) -> Diagnosis:
     """model_call is injectable for testing — see tests/test_diagnosis_agent.py,
     which drives this with a fake model that simulates a multi-turn tool loop."""
@@ -309,6 +286,7 @@ async def run_diagnosis(
         equipment_id=equipment_id,
         question=question,
     )
+    prior_context = await _fetch_recent_context(db, conversation.id)
 
     ctx = ToolContext(db=db, tenant_id=tenant_id)
     messages = [
@@ -320,6 +298,7 @@ async def run_diagnosis(
                 equipment_type=equipment_type,
                 image_analysis_id=image_analysis_id,
                 sensor_snapshot=sensor_snapshot,
+                prior_context=prior_context,
             ),
         }
     ]

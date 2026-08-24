@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 
 from app.config import get_settings
+from app.core.retry import call_with_retry, is_transient_llm_error
 from app.observability.metrics import record_llm_call
 
 MEASUREMENT_PATTERN = re.compile(
@@ -89,7 +90,10 @@ async def _anthropic_vision(image_bytes: bytes, media_type: str, user_prompt: st
     encoded = base64.b64encode(image_bytes).decode()
     start = time.perf_counter()
     try:
-        response = await client.messages.create(
+        response = await call_with_retry(
+            "vision",
+            is_transient_llm_error,
+            client.messages.create,
             model=settings.vision_model,
             max_tokens=1024,
             system=SYSTEM_PROMPT,
@@ -110,7 +114,7 @@ async def _anthropic_vision(image_bytes: bytes, media_type: str, user_prompt: st
                 }
             ],
         )
-    except Exception:
+    except Exception as exc:
         record_llm_call(
             provider="anthropic",
             model=settings.vision_model,
@@ -118,7 +122,11 @@ async def _anthropic_vision(image_bytes: bytes, media_type: str, user_prompt: st
             status="error",
             duration_seconds=time.perf_counter() - start,
         )
-        raise
+        # Wrapped as VisionError (preserving the original message) so
+        # analyze_uploaded_image's existing `except VisionError` handler
+        # persists a clean "failed" record instead of leaking an unhandled
+        # 500 once retries (see app/core/retry.py) are exhausted.
+        raise VisionError(f"Vision analysis failed: {exc}") from exc
     record_llm_call(
         provider="anthropic",
         model=settings.vision_model,
@@ -145,7 +153,10 @@ async def _openai_vision(image_bytes: bytes, media_type: str, user_prompt: str) 
     data_url = f"data:{media_type};base64,{encoded}"
     start = time.perf_counter()
     try:
-        response = await client.chat.completions.create(
+        response = await call_with_retry(
+            "vision",
+            is_transient_llm_error,
+            client.chat.completions.create,
             model=settings.vision_model,
             max_tokens=1024,
             messages=[
@@ -159,7 +170,7 @@ async def _openai_vision(image_bytes: bytes, media_type: str, user_prompt: str) 
                 },
             ],
         )
-    except Exception:
+    except Exception as exc:
         record_llm_call(
             provider="openai",
             model=settings.vision_model,
@@ -167,7 +178,7 @@ async def _openai_vision(image_bytes: bytes, media_type: str, user_prompt: str) 
             status="error",
             duration_seconds=time.perf_counter() - start,
         )
-        raise
+        raise VisionError(f"Vision analysis failed: {exc}") from exc
     usage = response.usage
     record_llm_call(
         provider="openai",

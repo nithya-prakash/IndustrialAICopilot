@@ -1,9 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.deps import get_current_user
+from app.core.rate_limit import limiter
 from app.database import get_db
 from app.models.document import Document, DocumentVersion
 from app.models.user import User
@@ -20,6 +22,7 @@ from app.services.document_service import (
 )
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+_settings = get_settings()
 
 
 def _to_response(
@@ -41,7 +44,9 @@ def _to_response(
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(_settings.rate_limit_upload)
 async def upload(
+    request: Request,
     file: UploadFile = File(...),
     equipment_type: str | None = Form(default=None),
     equipment_id: str | None = Form(default=None),

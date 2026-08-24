@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.deps import get_current_user
+from app.core.rate_limit import limiter
 from app.core.security import create_access_token
 from app.database import get_db
 from app.models.user import User
@@ -15,6 +17,7 @@ from app.services.auth_service import (
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+_settings = get_settings()
 
 
 @router.get("/me", response_model=UserResponse)
@@ -23,7 +26,10 @@ async def read_current_user(user: User = Depends(get_current_user)) -> UserRespo
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit(_settings.rate_limit_auth)
+async def register(
+    request: Request, payload: RegisterRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     try:
         user = await register_user(
             db,
@@ -47,7 +53,10 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit(_settings.rate_limit_auth)
+async def login(
+    request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     try:
         user = await authenticate_user(db, username=payload.username, password=payload.password)
     except InvalidCredentialsError as exc:

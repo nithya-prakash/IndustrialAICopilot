@@ -5,6 +5,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
 from app.config import get_settings
+from app.core.retry import call_with_retry_sync, is_transient_qdrant_error
 
 
 @lru_cache
@@ -16,8 +17,13 @@ def get_qdrant_client() -> QdrantClient:
 def ensure_collection() -> None:
     settings = get_settings()
     client = get_qdrant_client()
-    if not client.collection_exists(settings.qdrant_collection):
-        client.create_collection(
+    if not call_with_retry_sync(
+        "qdrant_collection_exists", is_transient_qdrant_error,
+        client.collection_exists, settings.qdrant_collection,
+    ):
+        call_with_retry_sync(
+            "qdrant_create_collection", is_transient_qdrant_error,
+            client.create_collection,
             collection_name=settings.qdrant_collection,
             vectors_config=qmodels.VectorParams(
                 size=settings.embedding_dim, distance=qmodels.Distance.COSINE
@@ -31,7 +37,9 @@ def upsert_chunks(points: list[tuple[str, list[float], dict[str, Any]]]) -> None
         return
     settings = get_settings()
     client = get_qdrant_client()
-    client.upsert(
+    call_with_retry_sync(
+        "qdrant_upsert", is_transient_qdrant_error,
+        client.upsert,
         collection_name=settings.qdrant_collection,
         points=[
             qmodels.PointStruct(id=point_id, vector=vector, payload=payload)
@@ -76,7 +84,10 @@ def search(
     Returns (chunk_id, score, payload)."""
     settings = get_settings()
     client = get_qdrant_client()
-    if not client.collection_exists(settings.qdrant_collection):
+    if not call_with_retry_sync(
+        "qdrant_collection_exists", is_transient_qdrant_error,
+        client.collection_exists, settings.qdrant_collection,
+    ):
         return []
 
     must: list[qmodels.FieldCondition] = [
@@ -100,7 +111,9 @@ def search(
             qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id))
         )
 
-    results = client.query_points(
+    results = call_with_retry_sync(
+        "qdrant_search", is_transient_qdrant_error,
+        client.query_points,
         collection_name=settings.qdrant_collection,
         query=query_vector,
         query_filter=qmodels.Filter(must=must),

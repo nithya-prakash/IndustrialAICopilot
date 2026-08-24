@@ -70,6 +70,18 @@ class Settings(BaseSettings):
     openai_output_cost_per_1k_usd: float = 0.0
 
     rate_limit_default: str = "60/minute"
+    # Tighter limits for security-sensitive (brute-force-able) and expensive
+    # (LLM/VLM-backed) endpoints specifically — see app/core/rate_limit.py.
+    rate_limit_auth: str = "10/minute"
+    rate_limit_upload: str = "20/minute"
+    rate_limit_ai: str = "10/minute"
+
+    # Bounded retry/backoff for transient LLM/VLM/Qdrant failures — see
+    # app/core/retry.py. Never retries validation/auth/malformed-request
+    # errors, only timeouts/connection errors/rate limits/5xx.
+    retry_max_attempts: int = 3
+    retry_wait_min_seconds: float = 1.0
+    retry_wait_max_seconds: float = 8.0
 
     redis_url: str = "redis://localhost:6379/0"
 

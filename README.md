@@ -80,7 +80,7 @@ flowchart LR
     AG -- "tool calls" --> TL["search docs · sensor history<br/>image analysis · maintenance<br/>calculator · report gen"]
     TL --> PG
     TL --> QD
-    AG -- "chat completion" --> LLM[["Anthropic / OpenAI"]]
+    AG -- "tool-calling completion" --> LLM[["Anthropic"]]
 
     API -- "/metrics" --> PR["Prometheus"]
     PR --> GF["Grafana"]
@@ -137,8 +137,20 @@ docker compose up --build
 ## Running tests
 
 ```bash
-make test    # unit tests, run inside the backend container
+make test        # the full suite (mocked/deterministic — no API key needed), run inside the backend container
+make test-live   # live smoke tests against a real Anthropic API — needs ANTHROPIC_API_KEY, skips cleanly without one
 ```
+
+`make test` includes everything: unit tests, real-Docker-infra integration
+tests (Postgres/Qdrant), and the mocked AI-pipeline tests (VLM, agent
+tool-loop, full end-to-end diagnosis pipeline) — all deterministic, none
+needing a paid API key. The two tests under `tests/live/` are the only
+ones in the suite that make a real, billed call to an external provider;
+they're marked `@pytest.mark.live` and run as part of `make test` too, but
+report **SKIPPED** (not passed) unless `ANTHROPIC_API_KEY` is set — a
+skipped run can never be mistaken for a verified one. Diagnosis-quality
+evaluation against real API responses is separate — see "Diagnosis agent
+evaluation" below.
 
 ## Migrations
 
@@ -186,10 +198,11 @@ diagnosis text — see `docs/architecture-decisions.md` for why that would
 be exactly the kind of unverified metric this project avoids elsewhere.
 
 **Requires `ANTHROPIC_API_KEY`** — unlike retrieval evaluation, there's no
-local stand-in for the agent's own reasoning, so this exits cleanly with a
-message rather than running (and never fabricates a report) if no key is
-configured — which is the case in this project's own development
-environment; see Known limitations.
+local stand-in for the agent's own reasoning, so with no key configured
+(the case in this project's own development environment) this prints
+`NOT RUN — LIVE MODEL CREDENTIALS NOT CONFIGURED` and exits, rather than
+running against a fake model and presenting that as a real report; see
+Known limitations.
 
 ## Try the document pipeline
 
@@ -365,23 +378,36 @@ extensions this project could reasonably grow into, not commitments:
 - BM25 is recomputed per query over the tenant-scoped candidate set fetched
   from Postgres rather than a persistent index — fine at portfolio scale,
   documented as a scaling limitation in the ADR.
-- Live end-to-end LLM/VLM/agent calls (`app/rag/generation.py`,
-  `app/vision/analyzer.py`, `app/agents/diagnosis_agent.py`) are
-  implemented and thoroughly tested (parsing, citation validation,
-  measurement-flagging, the full multi-turn tool loop via a scripted fake
-  model), but have not been verified against a real Anthropic call in this
-  environment — no API key is currently configured. All fail cleanly with
-  a clear error rather than crashing, and that failure path is
-  live-verified end-to-end through the real HTTP layer. Everything the
-  agent depends on — retrieval, vision preprocessing, sensor analytics,
-  tool dispatch, maintenance schedule computation — is fully live-verified
-  against real Postgres/Qdrant data; only the actual Claude API call is
-  unverified.
+- **NOT VERIFIED — LIVE MODEL CREDENTIALS NOT CONFIGURED**: no API key is
+  configured in this environment, so the actual Claude API call has never
+  been exercised end-to-end here. What *is* real: agentic tool-calling
+  architecture with deterministic integration tests (the full multi-turn
+  tool loop, dispatch across all 7 tools, unknown-tool/malformed-argument/
+  tool-exception handling, and citation validation, all driven by a
+  scripted fake model — `tests/test_diagnosis_agent.py`), and a
+  vision-language analysis pipeline with mocked integration coverage
+  (real HTTP upload → validation → preprocessing → structured-result
+  parsing → persistence, only the Anthropic SDK client mocked —
+  `tests/test_vision_integration_mocked.py`), plus a full mocked
+  end-to-end pipeline test spanning auth through audit logging
+  (`tests/test_e2e_diagnosis_pipeline_mocked.py`). Retry/backoff for
+  transient provider failures is implemented and tested
+  (`app/core/retry.py`). Live-model smoke tests exist
+  (`tests/live/test_live_smoke.py`, `pytest -m live`) and will run for
+  real the moment `ANTHROPIC_API_KEY` is set — until then they report
+  **SKIPPED**, not passed. Everything the agent depends on that doesn't
+  need a paid API — retrieval, vision preprocessing, sensor analytics,
+  tool dispatch, maintenance schedule computation, the approval workflow,
+  audit logging — is fully live-verified against real Postgres/Qdrant
+  data. Live VLM/agent accuracy verification requires provider
+  credentials; no accuracy claim is made without one.
 - No local VLM option (Qwen-VL/LLaVA) — the provider abstraction supports
   adding one, but it wasn't built this phase (see ADR for the trade-off).
-- Tool-calling only supports `LLM_PROVIDER=anthropic` (plain generation in
-  Phase 3 supports OpenAI-compatible too) — a scoped trade-off, not an
-  oversight (see ADR).
+- Tool-calling only supports `LLM_PROVIDER=anthropic` — the agent needs
+  the raw Anthropic `tools=` request shape, which the (now-removed)
+  provider-agnostic generation helper never supported (see ADR's Fix Pass
+  entry). The vision pipeline's separate `VISION_PROVIDER` setting still
+  supports both Anthropic and OpenAI.
 - Prometheus/Grafana observability covers the FastAPI backend process only
   — the Celery worker (document ingestion) isn't scraped, since it runs
   multiple forked processes and doesn't serve HTTP (see ADR for what that

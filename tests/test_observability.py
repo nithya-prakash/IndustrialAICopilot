@@ -4,7 +4,7 @@ import uuid
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.diagnosis_agent import ModelToolCall, ModelTurn, run_diagnosis
+from app.agents.diagnosis_agent import run_diagnosis
 from app.config import Settings
 from app.llm.client import LLMError
 from app.models.approval import ApprovalDecision
@@ -19,6 +19,7 @@ from app.observability.metrics import (
     llm_tokens_total,
     record_llm_call,
 )
+from app.rag.generation import ModelToolCall, ModelTurn
 from app.services.approval_service import approve_diagnosis
 from app.tools.executor import ToolExecutionResult
 

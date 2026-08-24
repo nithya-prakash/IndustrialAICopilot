@@ -111,8 +111,22 @@ data**, not instructions:
 
 ## Rate limiting, CORS, and transport headers
 
-- `slowapi` rate limiting, default `60/minute` per client (`app/main.py`),
-  configurable via `RATE_LIMIT_DEFAULT`.
+- `slowapi` rate limiting, enforced per-route via explicit
+  `@limiter.limit(...)` decorators (`app/core/rate_limit.py` — registering
+  `app.state.limiter` alone does not enforce anything; only a decorated
+  route does). Currently applied to: `POST /api/v1/auth/register` and
+  `/login` (`RATE_LIMIT_AUTH`, default `10/minute` — brute-force
+  resistance), `POST /api/v1/documents/upload` (`RATE_LIMIT_UPLOAD`,
+  default `20/minute`), and the AI-backed `POST /api/v1/images/analyze` and
+  `POST /api/v1/copilot/query` (`RATE_LIMIT_AI`, default `10/minute` —
+  these are the expensive, LLM/VLM-backed calls). `RATE_LIMIT_DEFAULT`
+  (`60/minute`) is the `Limiter`'s fallback for any future route that opts
+  in without its own explicit limit; `GET /api/v1/health` and `GET /metrics`
+  are deliberately never rate-limited (health checks and the Prometheus
+  scraper). A `rate_limit_exceeded_total{path}` counter tracks every 429
+  (`app/observability/metrics.py`). See `tests/test_rate_limit.py` for
+  tests that drive real request sequences past each limit and assert the
+  429.
 - CORS is an explicit origin allowlist (`CORS_ORIGINS`), not a wildcard —
   the frontend's dev server, Docker-served origin, and nothing else by
   default.

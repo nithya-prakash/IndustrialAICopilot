@@ -11,7 +11,8 @@ for the *why* behind the non-obvious choices referenced below.
 - Structured JSON logging with per-request context (`app/logging_config.py`)
 - User model + role-based auth (technician / supervisor / admin): register,
   login, JWT bearer tokens, password hashing (bcrypt)
-- Rate limiting (slowapi), CORS, security headers, request-ID propagation
+- Rate limiting (slowapi, enforced per-route on auth/upload/AI endpoints —
+  see "Fix Pass" below), CORS, security headers, request-ID propagation
 - Health check endpoint with a live database check
 - Dockerized backend + Postgres + Qdrant with health checks
 
@@ -37,12 +38,14 @@ for the *why* behind the non-obvious choices referenced below.
 - Metadata filtering (tenant always enforced; equipment type/ID, document,
   current-version-only optional) — verified live, including that a
   different tenant gets zero results from another tenant's manuals
-- Grounded generation (`app/rag/generation.py`) with structural citation
-  validation: the model cites by index into a numbered source list, so a
-  citation is either a real retrieved chunk or flagged invalid and
-  dropped — never a fabricated filename/page
-- Configurable LLM provider (`app/llm/client.py`): Anthropic by default,
-  OpenAI-compatible (incl. local Ollama) as a drop-in alternative
+- Grounded generation with structural citation validation, now living in
+  the diagnosis agent (`app/agents/diagnosis_agent.py:_validate_causes`,
+  called via `app/rag/generation.py:call_model` — consolidated here in the
+  Fix Pass below, see that section and the ADR): every tool call attaches
+  real citation strings built from actual retrieved data, accumulated into
+  a session-wide set, and the model's final citations are checked against
+  it — a citation that doesn't match something actually gathered is
+  dropped, never trusted
 - Retrieval evaluation harness with real Recall@K/Precision@K/MRR/nDCG@K
   (`evaluation/run.py`, `make eval`)
 
@@ -52,7 +55,8 @@ for the *why* behind the non-obvious choices referenced below.
 - Server-side re-encoding as a side effect that both strips EXIF metadata
   (privacy — phone photos often carry GPS) and downscales to a bounded size
 - Configurable VLM provider (`app/vision/analyzer.py`): Anthropic or OpenAI,
-  same provider-abstraction pattern as `app/llm/client.py`
+  its own provider switch independent of the diagnosis agent's LLM call
+  (which is Anthropic-only — see the ADR's Fix Pass entry on `LLM_PROVIDER`)
 - Structured output (observations with confidence, explicit limitations),
   never inventing measurements/temperatures/internal-component condition —
   enforced by the prompt *and* a structural post-hoc check
@@ -281,3 +285,60 @@ for the *why* behind the non-obvious choices referenced below.
   template README)
 - Re-verified clean: `ruff check .` and the full test suite pass against
   the final state; `npm run build`/`npm run lint` pass on the frontend
+
+## Fix Pass (post-audit)
+Full read-only audit of the finished 12-phase MVP, followed by fixes for
+every verified gap it found — see
+[`architecture-decisions.md`](architecture-decisions.md)'s "Fix Pass"
+section for the *why* behind each of these.
+- Rate limiting actually enforced: `app/core/rate_limit.py` (shared
+  `Limiter`, avoiding a circular import) plus `@limiter.limit(...)` on
+  auth register/login, document upload, image analyze, and copilot query,
+  each independently configurable (`RATE_LIMIT_AUTH`/`_UPLOAD`/`_AI`);
+  `rate_limit_exceeded_total` metric; verified with both a real request-
+  sequence test suite (`tests/test_rate_limit.py`) and a live `curl` loop
+  against the running container
+- Dead RAG-generation code (`app/rag/generation.py`'s index-marker citation
+  parser, zero production callers) removed; the file now holds the real
+  `call_model` step moved out of the diagnosis agent, so there is exactly
+  one production generation/citation implementation, not two
+- `tenacity`-based retry/backoff (`app/core/retry.py`) for the diagnosis
+  agent's LLM call, both vision providers, and Qdrant's read + ingestion-
+  write paths — transient errors only (timeouts/connection/rate-limit/5xx),
+  bounded attempts, exponential backoff, logged; exhausted retries now
+  raise a wrapped `LLMError`/`VisionError` (message preserved) instead of
+  leaking a raw SDK exception as an unhandled 500
+- Mocked VLM integration test (`tests/test_vision_integration_mocked.py`):
+  real HTTP upload + validation + preprocessing + persistence, only the
+  Anthropic SDK client mocked — success, malformed-response, and
+  timeout-after-retries-exhausted cases
+- Deterministic agent tool-loop tests extended
+  (`tests/test_diagnosis_agent.py`): all 7 tools exercised through the
+  loop's dispatch, unknown-tool and malformed-argument handling against the
+  *real* (unmocked) executor, a tool exception that doesn't crash the loop,
+  and a spy-model test proving the tool result is correctly threaded back
+  into the next model call
+- Full mocked end-to-end pipeline test
+  (`tests/test_e2e_diagnosis_pipeline_mocked.py`): auth → tenant validation
+  → real vision HTTP upload (mocked provider) → real hybrid RAG (real BM25
+  + RRF + real cross-encoder rerank, only the Qdrant dense leg mocked) →
+  scripted multi-turn agent tool-calling → structured diagnosis → citation
+  validation → confidence/severity → the approval workflow (technician
+  denied, supervisor approves) → audit record → cross-tenant isolation
+- Live-model smoke test infrastructure (`tests/live/`, `pytest.mark.live`):
+  real Anthropic calls for both the agent and vision paths, skipping
+  cleanly (not passing, not failing) with no credentials configured
+- Filename sanitization (`app/core/filenames.py`): strips path components,
+  control characters, and filesystem-reserved characters from the
+  *displayed* `original_filename` before storage — storage itself was
+  already UUID-path-based and never exploitable, this closes the display
+  side (reports, API responses, logs)
+- Bounded multi-turn conversation memory: follow-up questions in an
+  existing conversation now get the last 3 Q&A exchanges folded into the
+  model's initial message, explicitly labeled as background rather than
+  verified evidence; found and fixed a related pre-existing gap where
+  conversation reuse/detail-lookup was scoped by tenant only, not by the
+  user who started the thread
+- Full regression check after every change: the pre-existing suite plus
+  every test added this pass all pass together, run via
+  `docker compose run --rm backend python -m pytest`

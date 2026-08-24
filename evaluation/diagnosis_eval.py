@@ -154,12 +154,12 @@ async def run() -> dict:
 def main() -> None:
     settings = get_settings()
     if not settings.resolved_llm_api_key:
+        print("NOT RUN — LIVE MODEL CREDENTIALS NOT CONFIGURED")
         print(
-            "Skipping diagnosis evaluation: no ANTHROPIC_API_KEY (or LLM_API_KEY) "
-            "configured. This harness exercises the real diagnosis agent loop, which "
-            "needs a real model call — there's no local stand-in for it, unlike "
-            "retrieval evaluation (`make eval`). Set ANTHROPIC_API_KEY in .env and "
-            "re-run to get a real report."
+            "This harness exercises the real diagnosis agent loop, which needs a real "
+            "model call — there's no local stand-in for it, unlike retrieval evaluation "
+            "(`make eval`). Set ANTHROPIC_API_KEY (or LLM_API_KEY) in .env and re-run to "
+            "get a real report."
         )
         return
 

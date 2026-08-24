@@ -5,10 +5,11 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.diagnosis_agent import ModelToolCall, ModelTurn, run_diagnosis
+from app.agents.diagnosis_agent import run_diagnosis
 from app.llm.client import LLMError
 from app.models.conversation import Message, MessageRole
 from app.models.diagnosis import DiagnosisStatus
+from app.rag.generation import ModelToolCall, ModelTurn
 from app.tools.executor import ToolExecutionResult
 
 VALID_CITATION = "[electric_motor_manual.pdf, Troubleshooting > Overheating, p.1]"
@@ -428,6 +429,40 @@ async def test_conversation_and_messages_are_persisted(db_session: AsyncSession)
 
 
 async def test_existing_conversation_id_is_reused(db_session: AsyncSession) -> None:
+    same_user_id = uuid.uuid4()
+    model = ScriptedModel([_end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+    first = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=same_user_id,
+        conversation_id=None,
+        question="First question",
+        model_call=model,
+    )
+
+    model2 = ScriptedModel([_end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+    second = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=same_user_id,
+        conversation_id=first.conversation_id,
+        question="Follow-up question",
+        model_call=model2,
+    )
+
+    assert second.conversation_id == first.conversation_id
+
+    result = await db_session.execute(
+        select(Message).where(Message.conversation_id == first.conversation_id)
+    )
+    assert len(result.scalars().all()) == 4  # 2 user + 2 assistant across both turns
+
+
+async def test_different_users_conversation_id_is_not_reused(db_session: AsyncSession) -> None:
+    """A conversation is a private thread for the user who started it — a
+    different user_id passing the same conversation_id must NOT be silently
+    attached to it (would leak that user's prior Q&A into this one's
+    follow-up context, see _fetch_recent_context)."""
     model = ScriptedModel([_end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
     first = await run_diagnosis(
         db_session,
@@ -442,18 +477,80 @@ async def test_existing_conversation_id_is_reused(db_session: AsyncSession) -> N
     second = await run_diagnosis(
         db_session,
         tenant_id="acme",
-        user_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),  # a different user
         conversation_id=first.conversation_id,
         question="Follow-up question",
         model_call=model2,
     )
 
-    assert second.conversation_id == first.conversation_id
+    assert second.conversation_id != first.conversation_id
 
-    result = await db_session.execute(
-        select(Message).where(Message.conversation_id == first.conversation_id)
+
+async def test_follow_up_question_receives_bounded_prior_context(db_session: AsyncSession) -> None:
+    same_user_id = uuid.uuid4()
+    first_diagnosis_json = _diagnosis_json(summary="Likely a blocked air filter.")
+    first_model = ScriptedModel([_end_turn(first_diagnosis_json)])
+    first = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=same_user_id,
+        conversation_id=None,
+        question="Why is the motor overheating?",
+        model_call=first_model,
     )
-    assert len(result.scalars().all()) == 4  # 2 user + 2 assistant across both turns
+
+    class SpyModelLocal:
+        def __init__(self, turns):
+            self._turns = turns
+            self.received_messages = []
+
+        async def __call__(self, messages, system):
+            self.received_messages.append(messages)
+            return self._turns[len(self.received_messages) - 1]
+
+    second_model = SpyModelLocal([_end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+    await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=same_user_id,
+        conversation_id=first.conversation_id,
+        question="Does that also explain the noise?",
+        model_call=second_model,
+    )
+
+    initial_message = second_model.received_messages[0][0]["content"]
+    assert "Prior conversation context" in initial_message
+    assert "Why is the motor overheating?" in initial_message
+    assert "Likely a blocked air filter." in initial_message
+    assert "Does that also explain the noise?" in initial_message
+    # explicitly labeled as background, not trusted evidence for this turn
+    assert "not verified evidence" in initial_message.lower()
+
+
+async def test_first_question_in_a_conversation_has_no_prior_context(
+    db_session: AsyncSession,
+) -> None:
+    class SpyModelLocal:
+        def __init__(self, turns):
+            self._turns = turns
+            self.received_messages = []
+
+        async def __call__(self, messages, system):
+            self.received_messages.append(messages)
+            return self._turns[len(self.received_messages) - 1]
+
+    model = SpyModelLocal([_end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+    await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="First question ever",
+        model_call=model,
+    )
+
+    initial_message = model.received_messages[0][0]["content"]
+    assert "Prior conversation context" not in initial_message
 
 
 async def test_unknown_conversation_id_creates_new_conversation(db_session: AsyncSession) -> None:
@@ -467,6 +564,177 @@ async def test_unknown_conversation_id_creates_new_conversation(db_session: Asyn
         model_call=model,
     )
     assert diagnosis.conversation_id is not None
+
+
+class SpyModel:
+    """Like ScriptedModel, but records every `messages` list it was called
+    with, so a test can inspect exactly what the loop fed back to the model
+    after a tool call — not just the final diagnosis."""
+
+    def __init__(self, turns: list[ModelTurn]):
+        self._turns = turns
+        self.received_messages: list[list[dict]] = []
+
+    async def __call__(self, messages: list[dict], system: str) -> ModelTurn:
+        self.received_messages.append(messages)
+        turn = self._turns[len(self.received_messages) - 1]
+        return turn
+
+
+async def test_tool_result_is_threaded_back_to_the_model(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    """Verifies the loop's tool_result message (result-returned-to-model)
+    is correctly shaped and actually visible to the *next* model_call
+    invocation — not just that a diagnosis eventually completes."""
+    call = ModelToolCall(id="call_1", name="calculate", input={"expression": "6*7"})
+    model = SpyModel([_tool_use(call), _end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+    monkeypatch.setattr(
+        "app.agents.diagnosis_agent.execute_tool",
+        _fake_execute_tool_factory({"calculate": ToolExecutionResult(output={"result": 42})}),
+    )
+
+    await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="test",
+        model_call=model,
+    )
+
+    assert len(model.received_messages) == 2
+    second_call_messages = model.received_messages[1]
+    tool_result_message = second_call_messages[-1]
+    assert tool_result_message["role"] == "user"
+    tool_result_block = tool_result_message["content"][0]
+    assert tool_result_block["type"] == "tool_result"
+    assert tool_result_block["tool_use_id"] == "call_1"
+    assert tool_result_block["is_error"] is False
+    assert json.loads(tool_result_block["content"]) == {"result": 42}
+
+
+async def test_unknown_tool_at_loop_level_is_handled_gracefully(db_session: AsyncSession) -> None:
+    """Exercises the REAL execute_tool (not mocked) — the loop must survive
+    the model requesting a tool that doesn't exist."""
+    bogus_call = ModelToolCall(id="call_1", name="not_a_real_tool", input={})
+    model = ScriptedModel([_tool_use(bogus_call), _end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="test",
+        model_call=model,
+    )
+
+    assert diagnosis.status == DiagnosisStatus.completed
+    assert diagnosis.tool_calls[0]["tool"] == "not_a_real_tool"
+    assert "Unknown tool" in diagnosis.tool_calls[0]["summary"]
+
+
+async def test_malformed_tool_arguments_at_loop_level_real_executor(
+    db_session: AsyncSession,
+) -> None:
+    """Exercises the REAL execute_tool's own argument validation (not
+    mocked) — a malformed document_id must not crash the loop."""
+    bad_call = ModelToolCall(
+        id="call_1",
+        name="get_manual_section",
+        input={"document_id": "not-a-uuid", "section": "Troubleshooting"},
+    )
+    model = ScriptedModel([_tool_use(bad_call), _end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="test",
+        model_call=model,
+    )
+
+    assert diagnosis.status == DiagnosisStatus.completed
+    assert diagnosis.tool_calls[0]["tool"] == "get_manual_section"
+    assert "Invalid document_id" in diagnosis.tool_calls[0]["summary"]
+
+
+async def test_tool_exception_at_loop_level_does_not_crash_the_agent(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    """A bug inside a real tool handler (not a mocked error result) must
+    not propagate out of the loop — same guarantee as
+    test_tool_exception_is_caught_not_raised in test_tool_executor.py, but
+    proven end-to-end through run_diagnosis."""
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("simulated bug")
+
+    monkeypatch.setattr("app.tools.executor.hybrid_search", _boom)
+
+    search_call = ModelToolCall(
+        id="call_1", name="search_technical_documents", input={"query": "x"}
+    )
+    model = ScriptedModel([_tool_use(search_call), _end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="test",
+        model_call=model,
+    )
+
+    assert diagnosis.status == DiagnosisStatus.completed
+    assert "simulated bug" in diagnosis.tool_calls[0]["summary"]
+
+
+_ALL_SEVEN_TOOLS_INPUTS = {
+    "search_technical_documents": {"query": "overheating"},
+    "get_manual_section": {"document_id": str(uuid.uuid4()), "section": "Troubleshooting"},
+    "analyze_component_image": {"image_analysis_id": str(uuid.uuid4())},
+    "query_sensor_history": {
+        "equipment_id": "MOTOR-001",
+        "metric": "temperature",
+        "start_time": "2026-08-01T00:00:00Z",
+        "end_time": "2026-08-02T00:00:00Z",
+    },
+    "get_maintenance_schedule": {"equipment_id": "MOTOR-001"},
+    "calculate": {"expression": "1+1"},
+    "generate_diagnostic_report": {"diagnosis_id": str(uuid.uuid4())},
+}
+
+
+@pytest.mark.parametrize("tool_name", list(_ALL_SEVEN_TOOLS_INPUTS))
+async def test_agent_loop_dispatches_each_of_the_seven_tools(
+    db_session: AsyncSession, monkeypatch, tool_name: str
+) -> None:
+    """A fake LLM explicitly requests each of the 7 tools in turn — proves
+    the loop's dispatch, execution, and result-recording is uniform and
+    correct across the full tool set, not just the 2-3 tools exercised by
+    the scenario-focused tests above."""
+    call = ModelToolCall(id="call_1", name=tool_name, input=_ALL_SEVEN_TOOLS_INPUTS[tool_name])
+    model = ScriptedModel([_tool_use(call), _end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+    monkeypatch.setattr(
+        "app.agents.diagnosis_agent.execute_tool",
+        _fake_execute_tool_factory({tool_name: ToolExecutionResult(output={"ok": True})}),
+    )
+
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="test",
+        model_call=model,
+    )
+
+    assert diagnosis.status == DiagnosisStatus.completed
+    assert len(diagnosis.tool_calls) == 1
+    assert diagnosis.tool_calls[0]["tool"] == tool_name
+    assert diagnosis.tool_calls[0]["input"] == _ALL_SEVEN_TOOLS_INPUTS[tool_name]
 
 
 @pytest.mark.parametrize("tool_name", ["query_sensor_history"])

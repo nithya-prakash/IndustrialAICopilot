@@ -1,5 +1,5 @@
 """Prometheus metric definitions, shared across every instrumentation site
-(HTTP middleware in app/main.py, provider calls in app/llm/client.py and
+(HTTP middleware in app/main.py, provider calls in app/rag/generation.py and
 app/vision/analyzer.py, the agent loop in app/agents/diagnosis_agent.py,
 diagnosis/approval creation in app/agents/diagnosis_agent.py and
 app/services/approval_service.py). Defined once here rather than per-module
@@ -79,6 +79,18 @@ approvals_total = Counter(
     ["decision"],
 )
 
+rate_limit_exceeded_total = Counter(
+    "rate_limit_exceeded_total",
+    "Total requests rejected with 429 for exceeding a rate limit",
+    ["path"],
+)
+
+retry_attempts_total = Counter(
+    "retry_attempts_total",
+    "Total retry attempts for transient external-service failures (LLM/VLM/Qdrant)",
+    ["operation", "outcome"],
+)
+
 
 def record_llm_call(
     *,
@@ -91,9 +103,8 @@ def record_llm_call(
     output_tokens: int = 0,
 ) -> None:
     """Single call site for every LLM/VLM provider call's metrics — used by
-    app/llm/client.py (operation="generation"), app/vision/analyzer.py
-    (operation="vision"), and app/agents/diagnosis_agent.py
-    (operation="agent") so the label set and cost calculation live in one
+    app/rag/generation.py (operation="agent") and app/vision/analyzer.py
+    (operation="vision") so the label set and cost calculation live in one
     place instead of being reimplemented per call site."""
     llm_calls_total.labels(
         provider=provider, model=model, operation=operation, status=status

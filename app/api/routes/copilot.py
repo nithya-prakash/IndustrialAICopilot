@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.diagnosis_agent import run_diagnosis
+from app.config import get_settings
 from app.core.deps import get_current_user
+from app.core.rate_limit import limiter
 from app.database import get_db
 from app.models.approval import Approval
 from app.models.diagnosis import Diagnosis
@@ -10,6 +12,7 @@ from app.models.user import User
 from app.schemas.copilot import ApprovalResponse, CopilotQueryRequest, DiagnosisResponse
 
 router = APIRouter(prefix="/api/v1/copilot", tags=["copilot"])
+_settings = get_settings()
 
 
 def to_diagnosis_response(
@@ -52,7 +55,9 @@ def to_diagnosis_response(
 
 
 @router.post("/query", response_model=DiagnosisResponse)
+@limiter.limit(_settings.rate_limit_ai)
 async def query(
+    request: Request,
     payload: CopilotQueryRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
