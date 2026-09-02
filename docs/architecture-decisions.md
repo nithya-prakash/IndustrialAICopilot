@@ -703,3 +703,27 @@ diagnosis's conclusion as if it were freshly verified support for a new
 `possible_causes[].supporting_citations` entry, silently bypassing
 `_validate_causes`'s guarantee that every citation matches something
 actually retrieved in the current run.
+
+### Why does `process_document_version_sync` dispose the SQLAlchemy engine after every task, when the FastAPI backend never needs to?
+Found while preparing a terminal demo recording, not by the earlier audit:
+uploading a second document through the same long-lived Celery worker
+process failed with `RuntimeError: ... got Future ... attached to a
+different loop`. `app/database.py`'s `engine` is a module-level singleton
+shared by the whole worker process, but
+`process_document_version_sync` wraps every task in its own
+`asyncio.run(...)` — which opens a *new* event loop per task and closes it
+on return. An asyncpg connection is bound to the event loop that created
+it, so the pool's connection from task 1 was still sitting in the pool
+when task 2's `asyncio.run()` handed it a different, freshly-created loop
+— `pool_pre_ping`'s own liveness check is what actually throws, since even
+pinging the stale connection requires running on the loop that owns it.
+The FastAPI backend process never hits this: uvicorn runs one event loop
+for the process's entire lifetime, so `engine`'s pooled connections are
+always used from the same loop that created them. The fix
+(`app/services/ingestion_service.py:_process_and_dispose_engine`) disposes
+the engine in a `finally` block at the end of every task, in the same
+event loop that owns the connections being disposed — the next task's
+`asyncio.run()` then starts with an empty pool bound to its own loop.
+Verified by running two document uploads back-to-back against the same
+long-lived worker container (not `docker compose run --rm`, which would
+never have reproduced this) — failed before the fix, passed after.

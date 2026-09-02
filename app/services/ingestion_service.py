@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, engine
 from app.ingestion.chunker import chunk_blocks
 from app.ingestion.ocr import ocr_pages
 from app.ingestion.pdf_extractor import ExtractedBlock, extract_pdf
@@ -144,5 +144,22 @@ async def process_document_version(version_id: uuid.UUID) -> None:
             raise
 
 
+async def _process_and_dispose_engine(version_id: uuid.UUID) -> None:
+    """`app.database.engine` is a module-level singleton shared by every
+    Celery task in this worker process, but each task gets its own fresh
+    event loop via asyncio.run() below — and an asyncpg connection is bound
+    to the event loop that created it. Without disposing the pool at the
+    end of every task, the *second* task in this worker's lifetime tries to
+    reuse a connection whose event loop asyncio.run() already closed,
+    raising "got Future ... attached to a different loop". Disposing here
+    (same loop that owns the pooled connections, via try/finally so it
+    still runs on a mid-ingestion failure) drops them all, so the next
+    task's asyncio.run() starts with an empty pool bound to its own loop."""
+    try:
+        await process_document_version(version_id)
+    finally:
+        await engine.dispose()
+
+
 def process_document_version_sync(version_id: str) -> None:
-    asyncio.run(process_document_version(uuid.UUID(version_id)))
+    asyncio.run(_process_and_dispose_engine(uuid.UUID(version_id)))
