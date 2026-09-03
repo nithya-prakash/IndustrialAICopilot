@@ -60,6 +60,7 @@ async def _fetch_candidates(
             DocumentChunk.section,
             DocumentChunk.subsection,
             DocumentChunk.document_version_id,
+            DocumentChunk.qdrant_point_id,
             Document.id.label("document_id"),
             Document.original_filename,
             Document.equipment_type,
@@ -139,6 +140,17 @@ async def hybrid_search(
     if not rows_by_id or not query.strip():
         return []
 
+    # Qdrant is indexed under its own point_id (a uuid4 generated at
+    # ingestion time — see app/services/ingestion_service.py), never the
+    # same value as DocumentChunk.id. Translate dense results back to
+    # DocumentChunk.id via qdrant_point_id so they can actually match
+    # rows_by_id below — without this, every dense hit is silently dropped
+    # and "hybrid" search degrades to BM25-only (a real bug found and
+    # fixed during the Fix Pass evaluation; see the ADR entry).
+    chunk_id_by_point_id = {
+        row.qdrant_point_id: str(row.id) for row in rows if row.qdrant_point_id
+    }
+
     query_vector = embed_texts([query])[0]
     dense_results = qdrant_dense_search(
         query_vector,
@@ -148,7 +160,11 @@ async def hybrid_search(
         equipment_id=equipment_id,
         document_id=str(document_id) if document_id else None,
     )
-    dense_ranked = [chunk_id for chunk_id, _score, _payload in dense_results]
+    dense_ranked = [
+        chunk_id_by_point_id[point_id]
+        for point_id, _score, _payload in dense_results
+        if point_id in chunk_id_by_point_id
+    ]
 
     corpus = [(str(row.id), row.content) for row in rows]
     bm25_ranked = [sc.chunk_id for sc in bm25_search(query, corpus, top_k=settings.bm25_top_k)]

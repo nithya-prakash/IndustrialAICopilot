@@ -727,3 +727,35 @@ event loop that owns the connections being disposed — the next task's
 Verified by running two document uploads back-to-back against the same
 long-lived worker container (not `docker compose run --rm`, which would
 never have reproduced this) — failed before the fix, passed after.
+
+### Why did dense retrieval need a chunk-id translation step, and how was this found?
+Found during a rigorous retrieval ablation (evaluating each hybrid-search
+component in isolation — BM25-only, dense-only, hybrid+RRF, hybrid+RRF+
+rerank — against the same ground-truth question set `evaluation/run.py`
+already uses), not by the earlier audit or the Fix Pass: `dense_only`
+scored exactly 0.0 on every metric. Traced to `app/rag/retrieval.py:hybrid_search`
+— Qdrant is indexed under its own `uuid4()` point ID, generated
+independently at ingestion time and stored separately as
+`DocumentChunk.qdrant_point_id` (`app/services/ingestion_service.py`), but
+`hybrid_search`'s dense results were being filtered directly against
+`rows_by_id`, which is keyed by `DocumentChunk.id` — confirmed by direct
+query that these are never equal for any row. Every dense hit was
+therefore silently dropped before it could reach RRF fusion, meaning
+"hybrid retrieval" had actually been running as BM25-only since Phase 3 —
+a real correctness bug, not a design tradeoff, and a README/ADR claim that
+had been false the entire time it existed. Fixed by translating dense
+results through `qdrant_point_id -> DocumentChunk.id` right after the
+Qdrant call (`_fetch_candidates` now also selects `qdrant_point_id`);
+everything downstream (BM25 corpus keys, RRF, reranking, the final
+`RetrievedChunk` construction) is untouched.
+
+Re-measured after the fix (`evaluation/retrieval_ablation.py`, same 7-question
+benchmark): `dense_only` MRR 0.929, `hybrid_rrf` (no rerank) 0.905,
+`hybrid_reranked` (production config) 0.886, `bm25_only` 0.878. The
+reranker very slightly *lowers* MRR relative to unranked RRF fusion on
+this specific benchmark — reported as measured, not tuned away, per this
+evaluation's own rule against optimizing the benchmark for a better
+number. With only 7 questions this is not strong enough evidence to
+conclude the reranker is net-harmful in general; it's recorded as a real,
+reproducible result on a small internal benchmark, not a general
+performance claim. See `EVALUATION_AUDIT.md` for the full evaluation.
