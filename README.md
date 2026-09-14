@@ -13,6 +13,13 @@ for the design rationale behind every non-obvious choice below, and
 [`docs/security.md`](docs/security.md) for the security model
 specifically.
 
+![Demo: register, dashboard, real document upload with live ingestion status, AI Copilot query form](docs/images/demo.gif)
+
+*Real app, real backend, real data — registration, the dashboard, a live
+document upload progressing through the real ingestion pipeline, and the
+AI Copilot query form. Captured directly against the running stack, not
+staged.*
+
 ## Why this exists
 
 Most "AI chatbot" portfolio projects stop at RAG. This one is built
