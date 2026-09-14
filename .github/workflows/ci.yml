@@ -18,12 +18,19 @@ jobs:
     # upload.py and tests/test_document_audit_log.py exercise that path and
     # need a real Qdrant to connect to, or they fail with connection
     # refused despite passing inside the app's own docker-compose stack
-    # where Qdrant is always running alongside.
+    # where Qdrant is always running alongside. Same story for Redis: the
+    # JWT revocation blocklist (app/core/token_blocklist.py) always talks
+    # to a real redis.asyncio client, never mocked — any test that hits an
+    # authenticated route needs a real Redis to connect to.
     services:
       qdrant:
         image: qdrant/qdrant:v1.12.4
         ports:
           - 6333:6333
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
 
