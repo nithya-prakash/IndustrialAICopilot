@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.document import Document, DocumentChunk, DocumentVersion
-from app.rag.bm25 import bm25_search
+from app.rag.bm25 import bm25_search_cached
 from app.rag.embeddings import embed_texts
 from app.rag.fusion import reciprocal_rank_fusion
 from app.rag.qdrant_store import search as qdrant_dense_search
@@ -167,7 +167,18 @@ async def hybrid_search(
     ]
 
     corpus = [(str(row.id), row.content) for row in rows]
-    bm25_ranked = [sc.chunk_id for sc in bm25_search(query, corpus, top_k=settings.bm25_top_k)]
+    bm25_cache_key = (
+        tenant_id,
+        equipment_type,
+        equipment_id,
+        str(document_id) if document_id else None,
+    )
+    bm25_ranked = [
+        sc.chunk_id
+        for sc in bm25_search_cached(
+            query, corpus, top_k=settings.bm25_top_k, cache_key=bm25_cache_key
+        )
+    ]
 
     fused = reciprocal_rank_fusion([dense_ranked, bm25_ranked], k=settings.rrf_k)
     fused_ids = [chunk_id for chunk_id, _score in fused if chunk_id in rows_by_id]

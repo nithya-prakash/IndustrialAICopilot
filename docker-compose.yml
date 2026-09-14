@@ -82,6 +82,14 @@ services:
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       REDIS_URL: redis://redis:6379/0
+      # Enables prometheus_client's multiprocess mode (see
+      # app/tasks/observability.py) — the worker's prefork pool
+      # (--concurrency=2 below) runs task code in forked child processes,
+      # which a plain in-memory registry can't aggregate metrics across.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
+      CELERY_METRICS_PORT: "8001"
+    ports:
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,7 +110,12 @@ services:
       timeout: 10s
       start_period: 20s
       retries: 3
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    # prometheus_client opens mmap files under PROMETHEUS_MULTIPROC_DIR the
+    # moment any Counter/Gauge/Histogram is constructed — i.e. at Python
+    # import time, well before app/tasks/observability.py's worker_init
+    # signal handler would ever get a chance to create the directory. It
+    # has to exist before `celery` even starts importing anything.
+    command: sh -c "rm -rf /tmp/prometheus_multiproc && mkdir -p /tmp/prometheus_multiproc && celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2"
 
   frontend:
     build:

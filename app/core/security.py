@@ -30,6 +30,7 @@ def create_access_token(*, subject: uuid.UUID, role: str) -> str:
         "role": role,
         "iat": now,
         "exp": expire,
+        "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, settings.secret_key, algorithm=JWT_ALGORITHM)
 

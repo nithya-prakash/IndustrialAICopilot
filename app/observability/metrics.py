@@ -14,7 +14,7 @@ processes) or a push gateway, both real added complexity for a phase whose
 main value is the request/LLM/agent path. Documented as a scope cut, not
 an oversight — see docs/architecture-decisions.md.
 """
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 from app.config import get_settings
 
@@ -48,8 +48,20 @@ llm_cost_usd_total = Counter(
     "llm_cost_usd_total",
     "Estimated USD cost of LLM/VLM calls. Stays at zero unless "
     "*_COST_PER_1K_USD is configured with a real rate (see app/config.py) — "
-    "no price is guessed or hard-coded.",
+    "no price is guessed or hard-coded. This counter's absence from "
+    "/metrics is itself informative (a Counter with labels only appears "
+    "once .inc() has been called with them), but is easy to miss — see "
+    "llm_cost_tracking_configured below for an always-present signal.",
     ["provider", "model", "operation"],
+)
+llm_cost_tracking_configured = Gauge(
+    "llm_cost_tracking_configured",
+    "1 if at least one *_COST_PER_1K_USD rate is configured (see "
+    "app/config.py), 0 otherwise. Unlike llm_cost_usd_total (which simply "
+    "never increments, and so never appears in /metrics, when no rate is "
+    "configured), this gauge is always present and set once at backend "
+    "startup — so 'cost tracking is off' is an explicit, queryable fact "
+    "rather than an absence someone has to already know to look for.",
 )
 
 agent_tool_calls_total = Counter(
@@ -89,6 +101,17 @@ retry_attempts_total = Counter(
     "retry_attempts_total",
     "Total retry attempts for transient external-service failures (LLM/VLM/Qdrant)",
     ["operation", "outcome"],
+)
+
+celery_tasks_total = Counter(
+    "celery_tasks_total",
+    "Total Celery task completions, by outcome",
+    ["task_name", "status"],
+)
+celery_task_duration_seconds = Histogram(
+    "celery_task_duration_seconds",
+    "Celery task duration in seconds",
+    ["task_name"],
 )
 
 

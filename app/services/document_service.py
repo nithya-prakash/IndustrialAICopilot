@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.core.filenames import sanitize_display_filename
 from app.models.document import Document, DocumentChunk, DocumentStatus, DocumentVersion
+from app.rag.bm25 import invalidate_bm25_cache
 from app.rag.qdrant_store import delete_by_document_version, set_current_flag
 from app.services.audit_service import log_event
 from app.tasks.ingestion_tasks import process_document_version_task
@@ -211,6 +212,11 @@ async def delete_document(
         path = Path(version.storage_path)
         if path.exists():
             path.unlink()
+
+    # Same process as the BM25 index cache (app/rag/bm25.py) — a deletion
+    # can invalidate it immediately rather than waiting out the TTL, unlike
+    # ingestion completions, which happen in the separate Celery worker.
+    invalidate_bm25_cache()
 
     await db.delete(document)
     await log_event(

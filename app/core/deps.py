@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -6,31 +7,54 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import TokenError, decode_access_token
+from app.core.token_blocklist import is_token_revoked
 from app.database import get_db
 from app.models.user import User, UserRole
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
+_UNAUTHENTICATED = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Not authenticated",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+_INVALID_TOKEN = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Invalid or expired token",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+
+async def get_token_claims(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> dict[str, Any]:
+    """Decoded JWT payload for the current request — used both by
+    get_current_user below and by the /auth/logout route, which needs the
+    token's jti/exp to revoke it without a second decode."""
+    if credentials is None:
+        raise _UNAUTHENTICATED
+    try:
+        return decode_access_token(credentials.credentials)
+    except TokenError as exc:
+        raise _INVALID_TOKEN from exc
+
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    claims: dict[str, Any] = Depends(get_token_claims),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    if credentials is None:
+    try:
+        user_id = uuid.UUID(claims["sub"])
+    except (ValueError, KeyError) as exc:
+        raise _INVALID_TOKEN from exc
+
+    jti = claims.get("jti")
+    if jti and await is_token_revoked(jti):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    try:
-        payload = decode_access_token(credentials.credentials)
-        user_id = uuid.UUID(payload["sub"])
-    except (TokenError, ValueError, KeyError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
 
     user = await db.get(User, user_id)
     if user is None or not user.is_active:

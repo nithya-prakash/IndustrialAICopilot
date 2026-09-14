@@ -28,16 +28,34 @@ from app.logging_config import configure_logging, get_logger
 from app.observability.metrics import (
     http_request_duration_seconds,
     http_requests_total,
+    llm_cost_tracking_configured,
     rate_limit_exceeded_total,
 )
 
 settings = get_settings()
 
 
+def is_cost_tracking_configured(s) -> bool:
+    return any(
+        rate > 0
+        for rate in (
+            s.anthropic_input_cost_per_1k_usd,
+            s.anthropic_output_cost_per_1k_usd,
+            s.openai_input_cost_per_1k_usd,
+            s.openai_output_cost_per_1k_usd,
+        )
+    )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     configure_logging()
     get_logger().info("startup", app_env=settings.app_env)
+    # Always sets llm_cost_tracking_configured, whether or not a rate is
+    # configured — an explicit, always-queryable fact instead of a metric
+    # that simply never appears in /metrics when unconfigured (see that
+    # gauge's own docstring in app/observability/metrics.py).
+    llm_cost_tracking_configured.set(1 if is_cost_tracking_configured(settings) else 0)
     yield
 
 

@@ -86,3 +86,84 @@ def test_document_title_is_dropped_not_treated_as_a_section(titled_sample_pdf: P
     subsection_heading = next(b for b in result.blocks if b.text == "Unusual noise")
     assert section_heading.level == 1
     assert subsection_heading.level == 2
+
+
+@pytest.fixture
+def same_size_heading_pdf(tmp_path: Path) -> Path:
+    """A heading styled the same font size as body text (bold-only, or just
+    inconsistently authored) — the font-size heuristic alone can't see
+    this at all; only the text-pattern fallback (numbered/ALL-CAPS) can."""
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10)
+
+    path = tmp_path / "same_size.pdf"
+    doc = SimpleDocTemplate(str(path), pagesize=LETTER)
+    doc.build(
+        [
+            Paragraph("SAFETY", body),
+            Paragraph("Disconnect power before servicing the unit.", body),
+            Paragraph("5.2 Troubleshooting", body),
+            Paragraph("Check the bearing if vibration increases.", body),
+        ]
+    )
+    return path
+
+
+def test_extract_pdf_detects_all_caps_heading_at_body_font_size(
+    same_size_heading_pdf: Path,
+) -> None:
+    result = extract_pdf(same_size_heading_pdf)
+    heading = next(b for b in result.blocks if b.text == "SAFETY")
+    assert heading.block_type == "heading"
+    assert heading.level == 1
+    assert heading.level_source == "pattern"
+
+
+def test_extract_pdf_detects_numbered_heading_at_body_font_size(
+    same_size_heading_pdf: Path,
+) -> None:
+    result = extract_pdf(same_size_heading_pdf)
+    heading = next(b for b in result.blocks if b.text == "5.2 Troubleshooting")
+    assert heading.block_type == "heading"
+    assert heading.level == 2  # one dot in "5.2" -> subsection
+    assert heading.level_source == "pattern"
+
+
+def test_extract_pdf_body_text_between_pattern_headings_stays_text(
+    same_size_heading_pdf: Path,
+) -> None:
+    result = extract_pdf(same_size_heading_pdf)
+    body_texts = [b.text for b in result.blocks if b.block_type == "text"]
+    assert "Disconnect power before servicing the unit." in body_texts
+    assert "Check the bearing if vibration increases." in body_texts
+
+
+def test_pattern_heading_level_not_overridden_by_unrelated_size_headings(
+    tmp_path: Path,
+) -> None:
+    """A document with BOTH size-based headings (large font) and a
+    pattern-based heading (body-sized, numbered) — the pattern heading's
+    level must come from its own numbering convention, not get
+    re-classified by _assign_heading_levels' size comparison, which was
+    never meaningful for it."""
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontSize=20)
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10)
+
+    path = tmp_path / "mixed.pdf"
+    doc = SimpleDocTemplate(str(path), pagesize=LETTER)
+    doc.build(
+        [
+            Paragraph("Troubleshooting", h1),
+            Paragraph("A general troubleshooting overview.", body),
+            Paragraph("5.2 Bearing wear", body),
+            Paragraph("Inspect the bearing surface for pitting.", body),
+        ]
+    )
+
+    result = extract_pdf(path)
+    size_heading = next(b for b in result.blocks if b.text == "Troubleshooting")
+    pattern_heading = next(b for b in result.blocks if b.text == "5.2 Bearing wear")
+    assert size_heading.level == 1
+    assert pattern_heading.level == 2
+    assert pattern_heading.level_source == "pattern"

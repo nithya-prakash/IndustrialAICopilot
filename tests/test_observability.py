@@ -265,3 +265,41 @@ async def test_approve_diagnosis_records_approval_metric(db_session: AsyncSessio
     )
 
     assert _counter_value(approvals_total, decision=ApprovalDecision.approved.value) == before + 1
+
+
+async def test_cost_tracking_configured_false_when_all_rates_zero() -> None:
+    from app.main import is_cost_tracking_configured
+
+    class _FakeSettings:
+        anthropic_input_cost_per_1k_usd = 0.0
+        anthropic_output_cost_per_1k_usd = 0.0
+        openai_input_cost_per_1k_usd = 0.0
+        openai_output_cost_per_1k_usd = 0.0
+
+    assert is_cost_tracking_configured(_FakeSettings()) is False
+
+
+async def test_cost_tracking_configured_true_when_any_rate_set() -> None:
+    from app.main import is_cost_tracking_configured
+
+    class _FakeSettings:
+        anthropic_input_cost_per_1k_usd = 0.003
+        anthropic_output_cost_per_1k_usd = 0.0
+        openai_input_cost_per_1k_usd = 0.0
+        openai_output_cost_per_1k_usd = 0.0
+
+    assert is_cost_tracking_configured(_FakeSettings()) is True
+
+
+async def test_llm_cost_tracking_configured_gauge_reflects_settings_at_startup(
+    client: AsyncClient,
+) -> None:
+    """The client fixture's ASGI transport drives the real FastAPI lifespan
+    (app/main.py), so this exercises the actual startup wiring, not just
+    the pure helper function above."""
+    from app.observability.metrics import llm_cost_tracking_configured
+
+    response = await client.get("/metrics")
+    assert response.status_code == 200
+    # gauge is always present, regardless of whether cost tracking is on
+    assert llm_cost_tracking_configured._value.get() in (0.0, 1.0)

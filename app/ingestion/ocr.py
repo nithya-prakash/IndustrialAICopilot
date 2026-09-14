@@ -1,21 +1,18 @@
 """OCR fallback for scanned pages with no embedded text layer.
 
 Font metadata isn't available from OCR output, so heading detection here
-falls back to text patterns: numbered headings ("5.2 Troubleshooting") and
-short ALL-CAPS lines. Less reliable than the font-size heuristic used for
-text-layer PDFs (app/ingestion/pdf_extractor.py) — a known limitation for
+relies entirely on the text-pattern heuristic (numbered headings, short
+ALL-CAPS lines) defined once in app/ingestion/pdf_extractor.py and shared
+with the text-layer path there — less reliable than that path's font-size
+signal (which OCR output has no equivalent of), a known limitation for
 scanned documents with inconsistent heading conventions.
 """
-import re
 from pathlib import Path
 
 import pytesseract
 from pdf2image import convert_from_path
 
-from app.ingestion.pdf_extractor import ExtractedBlock
-
-NUMBERED_HEADING_RE = re.compile(r"^(\d+(?:\.\d+)*)\s+(\S.+)$")
-MAX_HEADING_CHARS = 90
+from app.ingestion.pdf_extractor import ExtractedBlock, text_pattern_heading_level
 
 
 def ocr_pages(path: Path, page_numbers: list[int]) -> list[ExtractedBlock]:
@@ -43,12 +40,11 @@ def _classify_lines(text: str, page_number: int) -> list[ExtractedBlock]:
         if not line:
             continue
 
-        match = NUMBERED_HEADING_RE.match(line)
-        if match and len(line) <= MAX_HEADING_CHARS:
-            level = 1 if match.group(1).count(".") == 0 else 2
-            blocks.append(ExtractedBlock(page_number, "heading", level, line))
-        elif len(line) <= 60 and line.isupper() and any(c.isalpha() for c in line):
-            blocks.append(ExtractedBlock(page_number, "heading", 1, line))
+        level = text_pattern_heading_level(line)
+        if level is not None:
+            blocks.append(
+                ExtractedBlock(page_number, "heading", level, line, level_source="pattern")
+            )
         else:
             blocks.append(ExtractedBlock(page_number, "text", 0, line))
     return blocks
