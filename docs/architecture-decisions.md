@@ -22,16 +22,24 @@ needed without giving up relational guarantees elsewhere.
 ### Why JWT bearer auth over session cookies?
 Stateless, works identically for the API whether the caller is the React
 frontend or a future mobile/CLI client, and needs no server-side session
-store. Trade-off: revocation requires a token blocklist (not yet built) —
-acceptable for a portfolio project, called out here as a known gap.
+store. Trade-off: revocation needs an explicit mechanism, since a bearer
+token is otherwise valid until it expires — built as a Redis blocklist
+keyed by the token's `jti`, TTL'd to match the token's own expiry so
+there's no separate cleanup job (`app/core/token_blocklist.py`,
+`POST /auth/logout`).
 
 ### Why configurable LLM/vision providers (not a single hard-coded API)?
 The brief explicitly requires local development without a paid API key.
 Anthropic Claude is the default (this developer's available key), but the
-settings-driven provider switch (`VISION_PROVIDER`, future `LLM_PROVIDER`)
-means the same code path works with OpenAI or a local model without a
-rewrite — relevant for demonstrating vendor-agnostic AI engineering, not
-just "I called the Claude API."
+settings-driven provider switch (`VISION_PROVIDER`, `LLM_PROVIDER`) means
+the same code path works with OpenAI or any OpenAI-compatible local server
+(Ollama, via `LLM_BASE_URL`) without a rewrite — relevant for demonstrating
+vendor-agnostic AI engineering, not just "I called the Claude API." The
+agent's tool-calling loop specifically was translated to OpenAI's Chat
+Completions shape (`app/rag/generation.py::_anthropic_messages_to_openai`)
+rather than making the whole loop provider-aware, and has been
+live-verified end-to-end against a local `llama3.2:3b` model with zero API
+cost.
 
 ## Phase 2
 

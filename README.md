@@ -132,6 +132,12 @@ cp .env.example .env   # then set ANTHROPIC_API_KEY if you want live LLM calls
 docker compose up --build
 ```
 
+No budget for API credits? Set `LLM_PROVIDER=openai`, `LLM_MODEL=llama3.2:3b`,
+`LLM_BASE_URL=http://host.docker.internal:11434/v1` and run a local
+[Ollama](https://ollama.com) server instead — no key, no cost. The diagnosis
+agent's tool-calling loop runs end-to-end against it; see the tool-calling
+caveat under Known limitations for what's different about that path.
+
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/api/v1/health
 
@@ -190,26 +196,38 @@ extensions this project could reasonably grow into, not commitments:
   structure in inconsistently formatted documents. OCR'd pages have no font
   metadata at all, so heading detection there falls back to a weaker
   text-pattern heuristic (numbered/ALL-CAPS headings).
-- No token revocation/blocklist yet (JWTs are valid until expiry).
 - BM25 is recomputed per query over the tenant-scoped candidate set fetched
   from Postgres rather than a persistent index — fine at portfolio scale,
   documented as a scaling limitation in the ADR.
-- **NOT VERIFIED — LIVE MODEL CREDENTIALS NOT CONFIGURED**: no API key is
-  configured in this environment, so the actual Claude API call (agent
-  reasoning, VLM accuracy, diagnosis evaluation) has never been exercised
-  end-to-end here — no accuracy claim is made without one. Everything up
-  to that boundary is real and live-verified, including deterministic
-  integration coverage of the agent loop and a mocked VLM/end-to-end
-  pipeline (see [`docs/usage-guide.md`](docs/usage-guide.md) and Running
-  tests above); the live smoke tests and evaluation harness are built and
-  will run for real the moment `ANTHROPIC_API_KEY` is set.
+- **Claude/Anthropic path not live-verified**: no Anthropic API credits are
+  configured in this environment, so Claude-specific agent reasoning, VLM
+  accuracy, and diagnosis evaluation have never been exercised end-to-end
+  against Claude here — no accuracy claim is made for that path without it.
+  The diagnosis agent's tool-calling loop *has* been live-verified
+  end-to-end against a free local model instead (Ollama, `llama3.2:3b`, via
+  `LLM_PROVIDER=openai` + `LLM_BASE_URL`) — real HTTP requests, real tool
+  calls confirmed via the `agent_tool_calls_total` Prometheus counter, real
+  evidence retrieved and cited, and unsupported model claims genuinely
+  caught and discarded by the citation validator. See
+  [`docs/usage-guide.md`](docs/usage-guide.md) and Running tests above for
+  the deterministic (non-live) coverage; the live smoke tests and
+  evaluation harness will run for real against Claude the moment
+  `ANTHROPIC_API_KEY` is set.
 - No local VLM option (Qwen-VL/LLaVA) — the provider abstraction supports
-  adding one, but it wasn't built this phase.
-- Tool-calling only supports `LLM_PROVIDER=anthropic` (the agent needs the
-  raw Anthropic `tools=` request shape); the vision pipeline's separate
-  `VISION_PROVIDER` setting still supports both Anthropic and OpenAI.
-- Prometheus/Grafana observability covers the FastAPI backend process only
-  — the Celery worker (document ingestion) isn't scraped.
+  adding one, but it wasn't built this phase, so vision analysis stays
+  unverified regardless of which LLM provider is used for text.
+- Tool-calling supports both `LLM_PROVIDER=anthropic` and
+  `LLM_PROVIDER=openai` (including any OpenAI-compatible server via
+  `LLM_BASE_URL`, e.g. local Ollama — see Local setup above). A 3B local
+  model selects the right tools but grounds its final answer in retrieved
+  evidence less reliably than Claude does in practice; the structural
+  citation validator strips any citation that doesn't match real tool
+  output, so this shows up as fewer supported claims per answer rather than
+  a fabricated citation slipping through.
+- Prometheus/Grafana observability covers the FastAPI backend (HTTP,
+  LLM/VLM, agent, diagnosis, approval metrics) and the Celery worker (task
+  counts/durations via a second scrape target,
+  `observability/prometheus/prometheus.yml`).
 - LLM/VLM cost tracking (`llm_cost_usd_total`) stays at zero unless you
   configure your own current provider rate — no price is hard-coded; token
   *counts* are always tracked from the provider's real usage response.
