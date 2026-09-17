@@ -12,8 +12,20 @@ build:
 logs:
 	docker compose logs -f backend
 
+# Deliberately overrides any live-provider config from the developer's own
+# .env (e.g. a local Ollama LLM_BASE_URL) so `make test` stays hermetic and
+# matches CI, which never sets these at all. Without this, a local .env
+# pointed at a real/local model makes the "no credentials configured" tests
+# exercise a live call instead and fail on unrelated assumptions (timing,
+# response shape) — see docs/architecture-decisions.md.
 test:
-	docker compose run --rm backend pytest -q
+	docker compose run --rm \
+		-e ANTHROPIC_API_KEY= \
+		-e OPENAI_API_KEY= \
+		-e LLM_API_KEY= \
+		-e LLM_BASE_URL= \
+		-e VISION_API_KEY= \
+		backend pytest -q
 
 test-live:
 	docker compose run --rm backend pytest tests/live -v

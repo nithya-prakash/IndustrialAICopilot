@@ -658,6 +658,29 @@ before the target term's IDF went positive — not a bug in the retrieval
 code, an inherent property of BM25 over a near-empty corpus that a fixture
 with too few documents would silently mask.
 
+### Why does `make test` explicitly blank out `ANTHROPIC_API_KEY`/`LLM_BASE_URL`/etc. on the `docker compose run` command line, instead of just reading `.env`?
+Discovered the hard way: pointing the local dev `.env` at a free local
+model (`LLM_PROVIDER=openai` + `LLM_BASE_URL=http://host.docker.internal:11434/v1`
+for Ollama, so the diagnosis agent can be exercised without paid API
+credits — see the README's local-setup section) makes `docker compose run
+--rm backend pytest` pick up that same config, because the `backend`
+service's `env_file: .env` applies to any `docker compose run` invocation
+against it, not just `docker compose up`. Several tests are explicitly
+designed to assert the *unconfigured*-provider failure path (their own
+names/docstrings say so, e.g.
+`test_query_without_api_key_returns_failed_diagnosis_not_500`) and one
+rate-limit test assumes each request fails fast; with a real (if free)
+model actually answering in 10-15s, those assumptions break — not because
+of a code regression, but because the test run stopped being hermetic. CI
+never hits this because its `backend` job runs pytest directly on a bare
+runner with no `.env` at all, so `ANTHROPIC_API_KEY`/`LLM_PROVIDER` are
+simply unset there. `make test`'s `-e VAR=` overrides reproduce that same
+"nothing configured" baseline locally regardless of what the developer's
+own `.env` happens to contain, so a local test run means the same thing as
+a CI run. `make test-live` deliberately keeps reading the real `.env`
+unmodified — that target's entire purpose is to make a real, credentialed
+call.
+
 ### Why sanitize the *displayed* filename at the point of storage into `Document.original_filename`, rather than at each display site?
 Path-traversal was never actually exploitable — uploaded files are always
 written under a UUID-based path (`f"{version_id}.pdf"`,
