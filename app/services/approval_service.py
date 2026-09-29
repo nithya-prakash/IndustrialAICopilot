@@ -1,6 +1,7 @@
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.approval import Approval, ApprovalDecision
@@ -15,6 +16,13 @@ class DiagnosisNotFoundError(Exception):
 
 class DiagnosisNotCompletedError(Exception):
     pass
+
+
+class SelfApprovalError(Exception):
+    """The supervisor deciding on a diagnosis is the one who asked for it.
+    Human-in-the-loop sign-off only means something if it's a second
+    person's judgment — otherwise a supervisor could run a query and
+    rubber-stamp their own result."""
 
 
 class AlreadyDecidedError(Exception):
@@ -48,6 +56,9 @@ async def _decide(
             f"Cannot decide on a diagnosis with status {diagnosis.status.value!r}"
         )
 
+    if diagnosis.user_id == supervisor_id:
+        raise SelfApprovalError(str(diagnosis_id))
+
     existing = await get_approval(db, diagnosis_id=diagnosis_id)
     if existing is not None:
         raise AlreadyDecidedError(existing)
@@ -60,7 +71,18 @@ async def _decide(
         comments=comments,
     )
     db.add(approval)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        # Two decisions submitted at the same moment can both pass the
+        # get_approval() check above; the unique constraint on diagnosis_id
+        # lets only one INSERT win. The loser is reported exactly like a
+        # sequential second decision (409), not an unhandled 500.
+        await db.rollback()
+        existing = await get_approval(db, diagnosis_id=diagnosis_id)
+        if existing is None:
+            raise
+        raise AlreadyDecidedError(existing) from exc
 
     approvals_total.labels(decision=decision.value).inc()
 

@@ -14,6 +14,7 @@ from app.services.approval_service import (
     AlreadyDecidedError,
     DiagnosisNotCompletedError,
     DiagnosisNotFoundError,
+    SelfApprovalError,
     approve_diagnosis,
     get_approval,
     reject_diagnosis,
@@ -79,6 +80,11 @@ def _handle_decision_errors(exc: Exception):
         return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     if isinstance(exc, AlreadyDecidedError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, SelfApprovalError):
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can't approve or reject your own diagnosis — another supervisor must",
+        )
     return exc
 
 
@@ -97,7 +103,12 @@ async def approve(
             supervisor_id=user.id,
             comments=payload.comments,
         )
-    except (DiagnosisNotFoundError, DiagnosisNotCompletedError, AlreadyDecidedError) as exc:
+    except (
+        DiagnosisNotFoundError,
+        DiagnosisNotCompletedError,
+        AlreadyDecidedError,
+        SelfApprovalError,
+    ) as exc:
         raise _handle_decision_errors(exc) from exc
 
     diagnosis = await get_diagnosis(db, diagnosis_id=diagnosis_id, tenant_id=user.tenant_id)
@@ -119,7 +130,12 @@ async def reject(
             supervisor_id=user.id,
             comments=payload.comments,
         )
-    except (DiagnosisNotFoundError, DiagnosisNotCompletedError, AlreadyDecidedError) as exc:
+    except (
+        DiagnosisNotFoundError,
+        DiagnosisNotCompletedError,
+        AlreadyDecidedError,
+        SelfApprovalError,
+    ) as exc:
         raise _handle_decision_errors(exc) from exc
 
     diagnosis = await get_diagnosis(db, diagnosis_id=diagnosis_id, tenant_id=user.tenant_id)
