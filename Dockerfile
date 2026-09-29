@@ -13,13 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Test/lint tools (pytest, ruff, reportlab) are only installed when
+# INSTALL_DEV=true. docker-compose.yml sets it for the local stack, where
+# `make test` / `make lint` run inside this image; a plain `docker build .`
+# produces the leaner runtime image without them.
+ARG INSTALL_DEV=false
+
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
     torch==2.13.0+cpu \
     && pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements-dev.txt
+    -r $([ "$INSTALL_DEV" = "true" ] && echo requirements-dev.txt || echo requirements.txt)
 
 COPY . .
 

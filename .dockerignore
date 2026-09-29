@@ -1,0 +1,31 @@
+# Never bake local secrets or history into the image — .env is passed to
+# containers at runtime via docker-compose's env_file instead.
+.env
+.env.*
+!.env.example
+.git
+.github
+
+# The frontend has its own image (frontend/Dockerfile); the backend image
+# doesn't need its source or 85MB of node_modules.
+frontend
+
+# Local runtime data — mounted into the containers via docker-compose, and
+# may contain uploaded (customer) manuals and images.
+data/manuals/*
+!data/manuals/.gitkeep
+!data/manuals/electric_motor_manual.pdf
+data/images/*
+data/test_images/*
+data/evaluation/results
+
+# Caches and build output
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+.venv
+venv
+.DS_Store

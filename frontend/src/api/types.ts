@@ -95,6 +95,7 @@ export interface Approval {
 export interface Diagnosis {
   id: string;
   conversation_id: string;
+  requested_by_user_id: string;
   status: DiagnosisStatus;
   error_message: string | null;
   equipment_id: string | null;

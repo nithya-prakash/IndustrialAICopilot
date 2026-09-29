@@ -227,3 +227,15 @@ async def test_concurrent_decision_losing_the_race_returns_409_not_500(
     )
     assert racing.status_code == 409
     assert "already approved" in racing.json()["detail"]
+
+
+async def test_diagnosis_response_names_who_requested_it(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    supervisor = await _register(client, "super_a", "acme", role="supervisor")
+    own = await _make_diagnosis(db_session, user_id=uuid.UUID(supervisor["user"]["id"]))
+    response = await client.get(
+        f"/api/v1/diagnoses/{own.id}",
+        headers={"Authorization": f"Bearer {supervisor['access_token']}"},
+    )
+    assert response.json()["requested_by_user_id"] == supervisor["user"]["id"]

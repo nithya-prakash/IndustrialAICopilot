@@ -21,6 +21,7 @@ def to_diagnosis_response(
     return DiagnosisResponse(
         id=diagnosis.id,
         conversation_id=diagnosis.conversation_id,
+        requested_by_user_id=diagnosis.user_id,
         status=diagnosis.status.value,
         error_message=diagnosis.error_message,
         equipment_id=diagnosis.equipment_id,

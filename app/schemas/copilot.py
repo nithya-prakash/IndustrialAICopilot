@@ -38,6 +38,9 @@ class ApprovalResponse(BaseModel):
 class DiagnosisResponse(BaseModel):
     id: uuid.UUID
     conversation_id: uuid.UUID
+    # Who asked for this diagnosis — lets the UI hide approve/reject from
+    # that person (the API refuses self-approval regardless).
+    requested_by_user_id: uuid.UUID
     status: str
     error_message: str | None
     equipment_id: str | None

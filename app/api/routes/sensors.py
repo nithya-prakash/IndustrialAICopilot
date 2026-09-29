@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +36,12 @@ from app.services.sensor_service import (
 router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
 
+def _as_utc(value: datetime) -> datetime:
+    """A timestamp without a timezone is taken to be UTC (the API's
+    convention), not whatever the server's local timezone happens to be."""
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 def _to_reading_response(reading: SensorReading) -> SensorReadingResponse:
     return SensorReadingResponse(
         id=reading.id,
@@ -61,7 +67,7 @@ async def upload(
             equipment_id=payload.equipment_id,
             equipment_type=payload.equipment_type,
             readings=payload.readings,
-            recorded_at=payload.recorded_at or datetime.now(),
+            recorded_at=_as_utc(payload.recorded_at) if payload.recorded_at else datetime.now(UTC),
         )
     except InvalidSensorDataError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

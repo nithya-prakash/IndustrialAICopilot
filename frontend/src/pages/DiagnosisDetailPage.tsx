@@ -48,11 +48,14 @@ export function DiagnosisDetailPage() {
     return <p style={{ color: "var(--color-text-muted)" }}>Loading…</p>;
   }
 
-  const canDecide =
+  const awaitingDecision =
     canApprove &&
     diagnosis.status === "completed" &&
     diagnosis.requires_human_approval &&
     !diagnosis.approval;
+  // Self-approval is refused by the API; don't offer it in the first place.
+  const isOwnDiagnosis = diagnosis.requested_by_user_id === user?.id;
+  const canDecide = awaitingDecision && !isOwnDiagnosis;
 
   return (
     <div className="stack" style={{ gap: 20 }}>
@@ -64,6 +67,12 @@ export function DiagnosisDetailPage() {
       </div>
 
       <DiagnosisView diagnosis={diagnosis} />
+
+      {awaitingDecision && isOwnDiagnosis && (
+        <div className="card card-pad" style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+          You requested this diagnosis, so another supervisor has to approve or reject it.
+        </div>
+      )}
 
       {canDecide && (
         <div className="card card-pad stack" style={{ gap: 12 }}>

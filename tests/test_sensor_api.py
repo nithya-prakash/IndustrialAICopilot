@@ -161,3 +161,34 @@ async def test_analysis_with_no_readings_returns_empty_report(client: AsyncClien
     assert body["reading_count"] == 0
     assert body["summary"] is None
     assert body["trend"] is None
+
+
+async def test_upload_timestamps_are_utc_not_server_local_time(
+    client: AsyncClient, monkeypatch
+) -> None:
+    """With no recorded_at, the server used to stamp naive local time; a
+    naive client timestamp is now also read as UTC, per the API convention."""
+    from app.api.routes import sensors as sensors_route
+
+    captured: list[datetime] = []
+
+    async def capture(db, **kwargs):
+        captured.append(kwargs["recorded_at"])
+        return []
+
+    monkeypatch.setattr(sensors_route, "ingest_snapshot", capture)
+    token = await _register(client, "tech_a", "acme")
+    headers = {"Authorization": f"Bearer {token}"}
+    for body in (
+        {"equipment_id": "M1", "readings": {"temperature": 80.0}},
+        {
+            "equipment_id": "M1",
+            "readings": {"temperature": 80.0},
+            "recorded_at": "2026-09-01T10:00:00",
+        },
+    ):
+        response = await client.post("/api/v1/sensors/upload", headers=headers, json=body)
+        assert response.status_code == 201
+
+    assert all(ts.tzinfo is not None and ts.utcoffset().total_seconds() == 0 for ts in captured)
+    assert captured[1] == datetime(2026, 9, 1, 10, 0, tzinfo=UTC)

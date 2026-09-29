@@ -4,8 +4,10 @@ import { ApiError } from "../api/client";
 import * as diagnosesApi from "../api/diagnoses";
 import type { Diagnosis } from "../api/types";
 import { ConfidenceBadge, SeverityBadge } from "../components/Badges";
+import { useAuth } from "../context/AuthContext";
 
 export function ApprovalsPage() {
+  const { user } = useAuth();
   const [pending, setPending] = useState<Diagnosis[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -85,31 +87,42 @@ export function ApprovalsPage() {
               </div>
             )}
 
-            <div className="field">
-              <label>Comments (optional)</label>
-              <textarea
-                rows={2}
-                value={commentDrafts[d.id] ?? ""}
-                onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                placeholder="Add context for this decision…"
-              />
-            </div>
+            {d.requested_by_user_id === user?.id ? (
+              // Self-approval is refused by the API; don't offer it here.
+              <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                You requested this diagnosis, so another supervisor has to approve or reject it.
+              </p>
+            ) : (
+              <div className="field">
+                <label>Comments (optional)</label>
+                <textarea
+                  rows={2}
+                  value={commentDrafts[d.id] ?? ""}
+                  onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                  placeholder="Add context for this decision…"
+                />
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 10 }}>
-              <button
-                className="btn btn-success"
-                onClick={() => decide(d.id, "approve")}
-                disabled={busyId === d.id}
-              >
-                Approve
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => decide(d.id, "reject")}
-                disabled={busyId === d.id}
-              >
-                Reject
-              </button>
+              {d.requested_by_user_id !== user?.id && (
+                <>
+                  <button
+                    className="btn btn-success"
+                    onClick={() => decide(d.id, "approve")}
+                    disabled={busyId === d.id}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => decide(d.id, "reject")}
+                    disabled={busyId === d.id}
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
               <Link to={`/diagnoses/${d.id}`} className="btn btn-secondary" style={{ marginLeft: "auto" }}>
                 Inspect evidence
               </Link>

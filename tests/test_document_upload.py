@@ -185,3 +185,66 @@ async def test_supervisor_can_upload_a_new_version_of_a_manual(client: AsyncClie
     assert response.status_code == 201
     assert response.json()["id"] == document_id
     assert response.json()["version_number"] == 2
+
+
+async def test_failed_upload_commit_leaves_no_orphaned_file(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tech = await _register(client, "tech_a", "acme")
+
+    async def failing_log_event(*args, **kwargs):
+        raise RuntimeError("simulated DB failure")
+
+    monkeypatch.setattr("app.services.document_service.log_event", failing_log_event)
+    with pytest.raises(RuntimeError):
+        await _upload(client, tech)
+
+    monkeypatch.undo()
+    assert list((tmp_path / "manuals").glob("*.pdf")) == []
+    listing = await client.get("/api/v1/documents", headers={"Authorization": f"Bearer {tech}"})
+    assert listing.json()["documents"] == []
+
+
+async def test_failed_delete_commit_keeps_the_file_and_vectors(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    supervisor = await create_user_token(client, "sup_a", "acme", role="supervisor")
+    document_id = (await _upload(client, supervisor)).json()["id"]
+    qdrant_deletes: list[str] = []
+    monkeypatch.setattr(
+        "app.services.document_service.delete_by_document_version", qdrant_deletes.append
+    )
+
+    async def failing_log_event(*args, **kwargs):
+        raise RuntimeError("simulated DB failure")
+
+    monkeypatch.setattr("app.services.document_service.log_event", failing_log_event)
+    with pytest.raises(RuntimeError):
+        await client.delete(
+            f"/api/v1/documents/{document_id}",
+            headers={"Authorization": f"Bearer {supervisor}"},
+        )
+
+    assert qdrant_deletes == []
+    assert len(list((tmp_path / "manuals").glob("*.pdf"))) == 1
+
+
+async def test_delete_succeeds_even_if_vector_cleanup_fails(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    supervisor = await create_user_token(client, "sup_a", "acme", role="supervisor")
+    document_id = (await _upload(client, supervisor)).json()["id"]
+
+    def qdrant_down(version_id: str) -> None:
+        raise ConnectionError("qdrant unreachable")
+
+    monkeypatch.setattr("app.services.document_service.delete_by_document_version", qdrant_down)
+    response = await client.delete(
+        f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {supervisor}"}
+    )
+    assert response.status_code == 204
+    assert list((tmp_path / "manuals").glob("*.pdf")) == []
+    gone = await client.get(
+        f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {supervisor}"}
+    )
+    assert gone.status_code == 404

@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.core.filenames import sanitize_display_filename
+from app.logging_config import get_logger
 from app.models.document import Document, DocumentChunk, DocumentStatus, DocumentVersion
 from app.rag.bm25 import invalidate_bm25_cache
 from app.rag.qdrant_store import delete_by_document_version, set_current_flag
@@ -100,6 +101,12 @@ async def create_document_version(
     fixture document directly from bytes, with no HTTP request involved)."""
     settings = get_settings()
 
+    # Postgres is the source of truth for which version is current (dense
+    # Qdrant hits are only used if they match a current-version chunk row —
+    # see app/rag/retrieval.py), so Qdrant is only updated *after* the
+    # commit below. A failed commit then leaves Qdrant untouched instead of
+    # half-superseded.
+    superseded_version_ids: list[str] = []
     if document_id is not None:
         document = await get_document(db, document_id=document_id, tenant_id=tenant_id)
         if document is None:
@@ -108,8 +115,9 @@ async def create_document_version(
             max((v.version_number for v in document.versions), default=0) + 1
         )
         for existing in document.versions:
+            if existing.is_current:
+                superseded_version_ids.append(str(existing.id))
             existing.is_current = False
-            set_current_flag(str(existing.id), is_current=False)
     else:
         document = Document(
             tenant_id=tenant_id,
@@ -128,10 +136,59 @@ async def create_document_version(
     storage_path = storage_dir / f"{version_id}.pdf"
     storage_path.write_bytes(content)
 
+    try:
+        version = await _record_version(
+            db,
+            document=document,
+            version_id=version_id,
+            version_number=next_version_number,
+            storage_path=storage_path,
+            content_type=content_type,
+            content=content,
+            tenant_id=tenant_id,
+            owner_id=owner_id,
+            filename=filename,
+        )
+    except Exception:
+        # Nothing references the file if the DB write didn't land — don't
+        # leave an orphaned PDF behind in data/manuals/.
+        await db.rollback()
+        storage_path.unlink(missing_ok=True)
+        raise
+
+    for old_version_id in superseded_version_ids:
+        try:
+            set_current_flag(old_version_id, is_current=False)
+        except Exception as exc:  # noqa: BLE001 - see the ordering note above
+            get_logger().warning(
+                "qdrant_current_flag_update_failed",
+                document_version_id=old_version_id,
+                error=str(exc),
+            )
+
+    if dispatch_processing:
+        process_document_version_task.delay(str(version.id))
+
+    return document, version
+
+
+async def _record_version(
+    db: AsyncSession,
+    *,
+    document: Document,
+    version_id: uuid.UUID,
+    version_number: int,
+    storage_path: Path,
+    content_type: str,
+    content: bytes,
+    tenant_id: str,
+    owner_id: uuid.UUID,
+    filename: str,
+) -> DocumentVersion:
     version = DocumentVersion(
         id=version_id,
         document_id=document.id,
-        version_number=next_version_number,
+        version_number=version_number,
         storage_path=str(storage_path),
         content_type=content_type,
         file_size_bytes=len(content),
@@ -147,16 +204,12 @@ async def create_document_version(
         action="document.uploaded",
         resource_type="document",
         resource_id=document.id,
-        detail={"filename": filename, "version_number": next_version_number},
+        detail={"filename": filename, "version_number": version_number},
     )
     await db.commit()
     await db.refresh(document)
     await db.refresh(version)
-
-    if dispatch_processing:
-        process_document_version_task.delay(str(version.id))
-
-    return document, version
+    return version
 
 
 async def list_documents(
@@ -207,16 +260,7 @@ async def delete_document(
         raise DocumentNotFoundError(str(document_id))
 
     filename = document.original_filename
-    for version in document.versions:
-        delete_by_document_version(str(version.id))
-        path = Path(version.storage_path)
-        if path.exists():
-            path.unlink()
-
-    # Same process as the BM25 index cache (app/rag/bm25.py) — a deletion
-    # can invalidate it immediately rather than waiting out the TTL, unlike
-    # ingestion completions, which happen in the separate Celery worker.
-    invalidate_bm25_cache()
+    versions = [(str(v.id), Path(v.storage_path)) for v in document.versions]
 
     await db.delete(document)
     await log_event(
@@ -229,6 +273,28 @@ async def delete_document(
         detail={"filename": filename},
     )
     await db.commit()
+
+    # Only once the DB delete has committed: removing the files and vectors
+    # first meant a failed commit left a document that still listed as
+    # "ready" but had no PDF and no embeddings. Cleanup failures now only
+    # leave unreferenced leftovers (retrieval never uses a vector without a
+    # matching chunk row), logged for manual cleanup.
+    for version_id, path in versions:
+        try:
+            delete_by_document_version(version_id)
+        except Exception as exc:  # noqa: BLE001 - the delete itself already succeeded
+            get_logger().warning(
+                "qdrant_cleanup_failed", document_version_id=version_id, error=str(exc)
+            )
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            get_logger().warning("file_cleanup_failed", path=str(path), error=str(exc))
+
+    # Same process as the BM25 index cache (app/rag/bm25.py) — a deletion
+    # can invalidate it immediately rather than waiting out the TTL, unlike
+    # ingestion completions, which happen in the separate Celery worker.
+    invalidate_bm25_cache()
 
 
 async def count_chunks(db: AsyncSession, *, document_version_id: uuid.UUID) -> int:
