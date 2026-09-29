@@ -219,11 +219,12 @@ extensions this project could reasonably grow into, not commitments:
 - Tool-calling supports both `LLM_PROVIDER=anthropic` and
   `LLM_PROVIDER=openai` (including any OpenAI-compatible server via
   `LLM_BASE_URL`, e.g. local Ollama — see Local setup above). A 3B local
-  model selects the right tools but grounds its final answer in retrieved
-  evidence less reliably than Claude does in practice; the structural
-  citation validator strips any citation that doesn't match real tool
-  output, so this shows up as fewer supported claims per answer rather than
-  a fabricated citation slipping through.
+  model selects the right tools but often grounds its final answer in
+  retrieved evidence only loosely (how Claude compares hasn't been measured
+  here — see the first point above); the structural citation validator
+  strips any citation that doesn't match real tool output, so this shows up
+  as fewer supported claims per answer rather than a fabricated citation
+  slipping through.
 - Prometheus/Grafana observability covers the FastAPI backend (HTTP,
   LLM/VLM, agent, diagnosis, approval metrics) and the Celery worker (task
   counts/durations via a second scrape target,

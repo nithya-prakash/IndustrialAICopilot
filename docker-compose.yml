@@ -1,3 +1,6 @@
+# Every published port is bound to 127.0.0.1 — reachable from this machine
+# (browser, curl, psql) but not from other devices on the network. Postgres,
+# Redis and Qdrant in particular have no business being LAN-reachable.
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-copilot}
       POSTGRES_DB: ${POSTGRES_DB:-industrial_copilot}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,8 +23,8 @@ services:
     image: qdrant/qdrant:v1.12.4
     restart: unless-stopped
     ports:
-      - "6335:6333"
-      - "6336:6334"
+      - "127.0.0.1:6335:6333"
+      - "127.0.0.1:6336:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     healthcheck:
@@ -33,10 +36,16 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Redis holds the Celery queue and the JWT revocation blocklist, so it
+    # requires a password even locally. Set REDIS_PASSWORD in .env
+    # (URL-safe characters only — it's embedded in REDIS_URL below).
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-copilot-redis}
+    command: sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD"'
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -53,9 +62,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-copilot}:${POSTGRES_PASSWORD:-copilot}@postgres:5432/${POSTGRES_DB:-industrial_copilot}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-copilot-redis}@redis:6379/0
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,7 +90,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-copilot}:${POSTGRES_PASSWORD:-copilot}@postgres:5432/${POSTGRES_DB:-industrial_copilot}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-copilot-redis}@redis:6379/0
       # Enables prometheus_client's multiprocess mode (see
       # app/tasks/observability.py) — the worker's prefork pool
       # (--concurrency=2 below) runs task code in forked child processes,
@@ -89,7 +98,7 @@ services:
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
       CELERY_METRICS_PORT: "8001"
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,7 +137,7 @@ services:
         VITE_API_BASE_URL: http://localhost:8000
     restart: unless-stopped
     ports:
-      - "3002:3000"
+      - "127.0.0.1:3002:3000"
     depends_on:
       - backend
 
@@ -139,7 +148,7 @@ services:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "9091:9090"
+      - "127.0.0.1:9091:9090"
     depends_on:
       - backend
 
@@ -148,7 +157,10 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Set GRAFANA_ADMIN_PASSWORD in .env. Anonymous read-only viewing stays
+      # on for the local demo — every port here is bound to 127.0.0.1, so
+      # only this machine can reach Grafana (or anything else) at all.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
@@ -156,7 +168,7 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "3003:3000"
+      - "127.0.0.1:3003:3000"
     depends_on:
       - prometheus
 

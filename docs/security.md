@@ -198,6 +198,17 @@ data**, not instructions:
   means a deployment can't accidentally run with the published
   placeholder key.
 
+## Local stack exposure
+
+- Every port `docker-compose.yml` publishes (API, frontend, Postgres,
+  Redis, Qdrant, Prometheus, Grafana, worker metrics) is bound to
+  `127.0.0.1` — usable from this machine, not reachable from other devices
+  on the same network.
+- Redis (Celery queue + JWT revocation blocklist) requires a password
+  (`REDIS_PASSWORD`); Grafana's admin password comes from
+  `GRAFANA_ADMIN_PASSWORD` rather than being fixed in the compose file.
+  Grafana keeps anonymous read-only viewing for the local demo.
+
 ## The `/metrics` endpoint is deliberately unauthenticated
 
 Unlike every other endpoint in this API, `GET /metrics` (Phase 9) takes
@@ -205,8 +216,9 @@ no bearer token — Prometheus's scraper has none to present. The real
 access control for this endpoint is meant to be network-level (only the
 scraper's network can reach it), not application-level; in this local
 Docker Compose setup that boundary is the compose network, and the port
-mapping is honest about the trade-off (host port 8000 also exposes it
-locally). A real deployment would close this by firewalling the metrics
+mapping is honest about the trade-off (host port 8000 also exposes it —
+bound to `127.0.0.1`, so only to this machine, not the network). A real
+deployment would close this by firewalling the metrics
 port to the Prometheus network specifically, not by adding a token
 Prometheus doesn't have a way to send.
 
@@ -225,9 +237,9 @@ new architecture.
 
 ## Known gaps (accepted, not hidden)
 
-- `/metrics` relies on network-level isolation that this local Docker
-  Compose setup doesn't actually enforce (host port 8000 is reachable
-  directly).
+- `/metrics` relies on network-level isolation. Locally every published
+  port is bound to `127.0.0.1`, so it's reachable from this machine but not
+  the network; a real deployment would firewall it to the scraper.
 - Rate limiting is per-client-IP via `slowapi`'s default key function,
   which is easy to defeat behind a shared NAT/proxy in a way a real
   production deployment would need to account for (e.g. keying on

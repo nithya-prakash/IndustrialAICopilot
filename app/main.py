@@ -1,4 +1,5 @@
 import math
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -38,6 +39,17 @@ from app.observability.metrics import (
 )
 
 settings = get_settings()
+
+# A client-supplied X-Request-ID is echoed back and written into every log
+# line for the request, so it's accepted only if it looks like an ID: short,
+# no spaces/newlines/control characters (log injection), else replaced.
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
+
+def resolve_request_id(client_value: str | None) -> str:
+    if client_value and _REQUEST_ID_PATTERN.fullmatch(client_value):
+        return client_value
+    return str(uuid.uuid4())
 
 
 def is_cost_tracking_configured(s) -> bool:
@@ -98,7 +110,7 @@ app.add_middleware(
 async def request_context_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
+    request_id = resolve_request_id(request.headers.get("x-request-id"))
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(request_id=request_id, path=request.url.path)
 
