@@ -28,6 +28,24 @@ plainly as the things that are actually enforced.
 (short, 60-minute-default) lifetime even if the user is not deactivated.
 Documented as a known limitation since Phase 1, not discovered late.
 
+## Sign-up and user management
+
+- Self-service sign-up (`POST /api/v1/auth/register`) always creates a
+  **new** company workspace (`tenants` table, `app/models/tenant.py`), and
+  the person signing up becomes its admin. It accepts no `role` field
+  (`extra="forbid"` — sending one is a `422`), and registering a workspace
+  ID that already exists is a `409`.
+- The only way into an existing workspace, at any role, is that
+  workspace's admin adding you via `POST /api/v1/users` (admin-only;
+  `GET` lists users, `PATCH` changes a role or deactivates). The new user's
+  tenant is always the admin's own, never taken from the request. An admin
+  can't demote or deactivate themselves. Each change is audit-logged.
+- Before this, sign-up accepted `role` and `tenant_id` from the request
+  body, so anyone could register as an admin inside any existing tenant —
+  see `architecture-decisions.md` ("Why does sign-up create a new
+  workspace…") for the finding and fix, and `tests/test_users_api.py` for
+  the regression tests.
+
 ## Authorization
 
 - Role-based access control — `technician` / `supervisor` / `admin`
@@ -55,7 +73,10 @@ Documented as a known limitation since Phase 1, not discovered late.
 - `tenant_id` comes from the authenticated user's own record
   (`user.tenant_id`), never from a request parameter — a client cannot
   ask to see a different tenant's data by passing a different tenant ID
-  in the URL or body, because no endpoint accepts one.
+  in the URL or body, because no endpoint accepts one. A user's own
+  `tenant_id` is set only when they create a new workspace or when that
+  workspace's admin adds them (see "Sign-up and user management" above),
+  so it can't be self-assigned to someone else's tenant either.
 
 ## Input validation
 

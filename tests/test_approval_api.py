@@ -5,23 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
+from tests.helpers import create_user
 
 
 async def _register(
     client: AsyncClient, username: str, tenant_id: str, role: str = "technician"
 ) -> dict:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-            "role": role,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return await create_user(client, username, tenant_id, role)
 
 
 async def _make_diagnosis(

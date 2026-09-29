@@ -15,9 +15,10 @@ from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserR
 from app.services.auth_service import (
     EmailTakenError,
     InvalidCredentialsError,
+    TenantTakenError,
     UsernameTakenError,
     authenticate_user,
-    register_user,
+    register_workspace,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -45,15 +46,21 @@ async def logout(claims: dict[str, Any] = Depends(get_token_claims)) -> None:
 async def register(
     request: Request, payload: RegisterRequest, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse:
+    """Creates a new company workspace with the caller as its admin — see
+    RegisterRequest. Other users are added by that admin via /api/v1/users."""
     try:
-        user = await register_user(
+        user = await register_workspace(
             db,
             username=payload.username,
             email=payload.email,
             password=payload.password,
-            role=payload.role,
             tenant_id=payload.tenant_id,
         )
+    except TenantTakenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Workspace already exists — ask its admin to add you",
+        ) from exc
     except UsernameTakenError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Username already registered"

@@ -42,6 +42,7 @@ export function Layout() {
         <NavItem to="/knowledge-base">Knowledge Base</NavItem>
         <NavItem to="/copilot">AI Copilot</NavItem>
         {canApprove && <NavItem to="/approvals">Approvals</NavItem>}
+        {isAdmin && <NavItem to="/users">Users</NavItem>}
         {isAdmin && <NavItem to="/audit-log">Audit Log</NavItem>}
 
         <div style={{ marginTop: "auto", padding: "14px 10px 0", borderTop: "1px solid #1e293b" }}>

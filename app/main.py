@@ -21,6 +21,7 @@ from app.api.routes import (
     health,
     images,
     sensors,
+    users,
 )
 from app.config import get_settings
 from app.core.rate_limit import limiter
@@ -152,3 +153,4 @@ app.include_router(copilot.router)
 app.include_router(diagnoses.router)
 app.include_router(conversations.router)
 app.include_router(audit.router)
+app.include_router(users.router)

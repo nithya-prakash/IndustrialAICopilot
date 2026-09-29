@@ -28,6 +28,7 @@ from PIL import Image
 from app.config import get_settings
 from app.models.document import Document, DocumentChunk, DocumentStatus, DocumentVersion
 from app.models.sensor import SensorReading
+from tests.helpers import create_user
 
 DOC_FILENAME = "electric_motor_manual.pdf"
 DOC_SECTION = "Troubleshooting"
@@ -132,18 +133,7 @@ class _FakeAnthropicClient:
 async def _register(
     client: AsyncClient, username: str, tenant_id: str, role: str = "technician"
 ) -> dict:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-            "role": role,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return await create_user(client, username, tenant_id, role)
 
 
 async def _seed_document_chunk(db_session) -> None:

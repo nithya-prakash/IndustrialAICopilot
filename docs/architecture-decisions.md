@@ -790,3 +790,37 @@ number. With only 7 questions this is not strong enough evidence to
 conclude the reranker is net-harmful in general; it's recorded as a real,
 reproducible result on a small internal benchmark, not a general
 performance claim. See `EVALUATION_AUDIT.md` for the full evaluation.
+
+### Why does sign-up create a new workspace instead of letting you pick a role and tenant?
+Found in a later security review: `POST /api/v1/auth/register` accepted
+both `role` and `tenant_id` straight from the request body. Anyone could
+sign up as `{"role": "admin", "tenant_id": "acme"}` and immediately read
+acme's manuals and diagnoses, approve its diagnoses, and read its audit
+log — which made both the role checks and the tenant isolation
+meaningless, despite every *query* being correctly tenant-scoped. The
+isolation boundary was only as strong as the way a user got their
+`tenant_id` in the first place.
+
+Fixed with a workspace-owner model rather than just dropping the `role`
+field: dropping only the role would still have let a stranger join any
+tenant as a technician and read its manuals. Now:
+- Sign-up always creates a **new** tenant, and its creator is that
+  tenant's admin. `RegisterRequest` has no `role` field and uses
+  `extra="forbid"`, so a request that sends one fails with a `422` instead
+  of being silently ignored.
+- A new `tenants` table (`app/models/tenant.py`) makes "this workspace
+  already exists" a primary-key fact rather than an "any user with this
+  `tenant_id` yet?" check that two concurrent sign-ups could both pass.
+  Its migration backfills every tenant that already has users, so an
+  existing workspace can't be claimed by a new sign-up after upgrading.
+- The only way into an existing workspace is its admin calling the new
+  admin-only `POST /api/v1/users` (plus `GET` to list and `PATCH` to
+  change role or deactivate). The tenant always comes from the admin's own
+  record, never the request. An admin can't demote or deactivate their own
+  account, so a workspace can't be left with nobody able to manage it.
+  Every change is audit-logged (`tenant.created`, `user.created`,
+  `user.updated`).
+- Tests (`tests/helpers.py`) now create users the same way production
+  does — the tenant's admin adds them via `POST /api/v1/users` — rather
+  than self-registering with a chosen role. `tests/test_users_api.py`
+  covers the original exploit directly.

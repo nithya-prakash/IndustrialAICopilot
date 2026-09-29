@@ -6,10 +6,12 @@ from app.models.document import Document, DocumentChunk, DocumentStatus, Documen
 from app.models.equipment import Equipment, MaintenanceTask
 from app.models.image_analysis import ImageAnalysis, ImageAnalysisStatus
 from app.models.sensor import SensorReading
+from app.models.tenant import Tenant
 from app.models.user import User
 
 __all__ = [
     "User",
+    "Tenant",
     "Document",
     "DocumentVersion",
     "DocumentChunk",

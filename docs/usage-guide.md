@@ -66,11 +66,21 @@ docker compose run --rm backend python scripts/generate_sample_manual.py
 generates a synthetic electric-motor manual at `data/manuals/electric_motor_manual.pdf`
 (original content, not copied from any real manufacturer). Upload it:
 
+Signing up creates a **new company workspace** and makes you its admin
+(registering into a workspace that already exists returns `409` — ask its
+admin to add you instead):
+
 ```bash
 TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"tech1","email":"tech1@example.com","password":"correct-horse-battery","tenant_id":"acme"}' \
+  -d '{"username":"admin1","email":"admin1@example.com","password":"correct-horse-battery","tenant_id":"acme"}' \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+
+# As that admin, add a supervisor (or technician) to the same workspace —
+# the only way into an existing workspace. They then log in normally.
+curl -X POST localhost:8000/api/v1/users \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"username":"sup1","email":"sup1@example.com","password":"correct-horse-battery","role":"supervisor"}'
 
 curl -X POST localhost:8000/api/v1/documents/upload \
   -H "Authorization: Bearer $TOKEN" \

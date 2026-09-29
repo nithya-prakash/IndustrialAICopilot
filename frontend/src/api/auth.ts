@@ -1,12 +1,14 @@
 import { apiRequest } from "./client";
-import type { TokenResponse, UserRole } from "./types";
+import type { TokenResponse } from "./types";
 
+// Sign-up always creates a NEW company workspace, with the caller as its
+// admin — there is no role field and no way to join an existing workspace
+// here. Other users are added by that admin (see api/users.ts).
 export function register(payload: {
   username: string;
   email: string;
   password: string;
-  role?: UserRole;
-  tenant_id?: string;
+  tenant_id: string;
 }): Promise<TokenResponse> {
   return apiRequest<TokenResponse>("/api/v1/auth/register", { method: "POST", body: payload });
 }

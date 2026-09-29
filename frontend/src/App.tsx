@@ -10,6 +10,7 @@ import { DiagnosisDetailPage } from "./pages/DiagnosisDetailPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { UsersPage } from "./pages/UsersPage";
 
 export default function App() {
   return (
@@ -43,6 +44,14 @@ export default function App() {
               element={
                 <RequireRole roles={["admin"]}>
                   <AuditLogPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <RequireRole roles={["admin"]}>
+                  <UsersPage />
                 </RequireRole>
               }
             />

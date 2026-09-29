@@ -1,18 +1,10 @@
 from httpx import AsyncClient
 
+from tests.helpers import create_user_token
+
 
 async def _register(client: AsyncClient, username: str, tenant_id: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    return await create_user_token(client, username, tenant_id)
 
 
 async def test_query_requires_auth(client: AsyncClient) -> None:
@@ -47,17 +39,7 @@ async def test_failed_diagnosis_is_audit_logged(client: AsyncClient) -> None:
     )
     diagnosis_id = create.json()["id"]
 
-    admin_response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": "admin_a",
-            "email": "admin_a@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": "acme",
-            "role": "admin",
-        },
-    )
-    admin_token = admin_response.json()["access_token"]
+    admin_token = await create_user_token(client, "admin_a", "acme", role="admin")
 
     logs = await client.get(
         "/api/v1/audit-logs",

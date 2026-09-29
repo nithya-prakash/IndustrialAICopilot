@@ -10,18 +10,20 @@ async def test_register_creates_user_and_returns_token(client: AsyncClient) -> N
             "username": "tech_jane",
             "email": "jane@example.com",
             "password": "correct-horse-battery",
-            "role": "technician",
+            "tenant_id": "jane_co",
         },
     )
     assert response.status_code == 201
     body = response.json()
     assert body["user"]["username"] == "tech_jane"
-    assert body["user"]["role"] == "technician"
+    # Signing up creates a new workspace; its creator is that workspace's admin.
+    assert body["user"]["role"] == "admin"
+    assert body["user"]["tenant_id"] == "jane_co"
     assert "hashed_password" not in body["user"]
 
     payload = decode_access_token(body["access_token"])
     assert payload["sub"] == body["user"]["id"]
-    assert payload["role"] == "technician"
+    assert payload["role"] == "admin"
 
 
 async def test_register_rejects_duplicate_username(client: AsyncClient) -> None:
@@ -30,12 +32,12 @@ async def test_register_rejects_duplicate_username(client: AsyncClient) -> None:
         "email": "jane@example.com",
         "password": "correct-horse-battery",
     }
-    first = await client.post("/api/v1/auth/register", json=payload)
+    first = await client.post("/api/v1/auth/register", json={**payload, "tenant_id": "co_1"})
     assert first.status_code == 201
 
     duplicate = await client.post(
         "/api/v1/auth/register",
-        json={**payload, "email": "someone-else@example.com"},
+        json={**payload, "email": "someone-else@example.com", "tenant_id": "co_2"},
     )
     assert duplicate.status_code == 409
 
@@ -47,6 +49,7 @@ async def test_login_succeeds_with_correct_credentials(client: AsyncClient) -> N
             "username": "tech_jane",
             "email": "jane@example.com",
             "password": "correct-horse-battery",
+            "tenant_id": "tech_jane_co",
         },
     )
 
@@ -65,6 +68,7 @@ async def test_login_rejects_wrong_password(client: AsyncClient) -> None:
             "username": "tech_jane",
             "email": "jane@example.com",
             "password": "correct-horse-battery",
+            "tenant_id": "tech_jane_co",
         },
     )
 
@@ -87,6 +91,7 @@ async def test_me_returns_current_user_with_valid_token(client: AsyncClient) -> 
             "username": "tech_jane",
             "email": "jane@example.com",
             "password": "correct-horse-battery",
+            "tenant_id": "tech_jane_co",
         },
     )
     token = register.json()["access_token"]
@@ -110,6 +115,7 @@ async def test_logout_revokes_token_so_it_cannot_be_used_again(client: AsyncClie
             "username": "tech_jane",
             "email": "jane@example.com",
             "password": "correct-horse-battery",
+            "tenant_id": "tech_jane_co",
         },
     )
     token = register.json()["access_token"]
@@ -135,6 +141,7 @@ async def test_logging_out_one_users_token_does_not_affect_another(
             "username": "tech_a",
             "email": "a@example.com",
             "password": "correct-horse-battery",
+            "tenant_id": "tech_a_co",
         },
     )
     register_b = await client.post(
@@ -143,6 +150,7 @@ async def test_logging_out_one_users_token_does_not_affect_another(
             "username": "tech_b",
             "email": "b@example.com",
             "password": "correct-horse-battery",
+            "tenant_id": "tech_b_co",
         },
     )
     token_a = register_a.json()["access_token"]

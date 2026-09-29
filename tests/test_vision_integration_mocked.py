@@ -15,6 +15,7 @@ from httpx import AsyncClient
 from PIL import Image
 
 from app.config import get_settings
+from tests.helpers import create_user_token
 
 
 def _jpeg_bytes(width: int = 200, height: int = 150) -> bytes:
@@ -75,17 +76,7 @@ class _FakeAnthropicClient:
 
 
 async def _register(client: AsyncClient, username: str, tenant_id: str = "acme") -> str:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    return await create_user_token(client, username, tenant_id)
 
 
 async def test_successful_provider_response_produces_ready_analysis(

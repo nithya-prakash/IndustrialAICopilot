@@ -15,11 +15,11 @@ banner "1. Health check — is the stack actually up?"
 curl -s localhost:8000/api/v1/health | python3 -m json.tool
 pause 3
 
-banner "2. Register a technician and get a JWT"
-DEMO_USER="tech-demo-$(date +%s)"
+banner "2. Create a new company workspace (you become its admin) and get a JWT"
+DEMO_USER="demo-$(date +%s)"
 TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d "{\"username\":\"$DEMO_USER\",\"email\":\"$DEMO_USER@example.com\",\"password\":\"correct-horse-battery\",\"tenant_id\":\"acme\"}" \
+  -d "{\"username\":\"$DEMO_USER\",\"email\":\"$DEMO_USER@example.com\",\"password\":\"correct-horse-battery\",\"tenant_id\":\"$DEMO_USER-co\"}" \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 echo "Token acquired: ${TOKEN:0:24}..."
 pause 3

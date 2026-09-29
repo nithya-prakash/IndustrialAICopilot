@@ -14,6 +14,7 @@ from PIL import Image
 
 from app.config import get_settings
 from app.observability.metrics import rate_limit_exceeded_total
+from tests.helpers import create_user_token
 
 MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
@@ -49,17 +50,7 @@ def no_celery_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _register(client: AsyncClient, username: str, tenant_id: str = "acme") -> str:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    return await create_user_token(client, username, tenant_id)
 
 
 async def test_login_rate_limit_returns_429_after_threshold(client: AsyncClient) -> None:
@@ -89,6 +80,7 @@ async def test_register_rate_limit_returns_429_after_threshold(client: AsyncClie
                 "username": f"flood_{i}",
                 "email": f"flood_{i}@example.com",
                 "password": "correct-horse-battery",
+                "tenant_id": f"flood_tenant_{i}",
             },
         )
         statuses.append(response.status_code)

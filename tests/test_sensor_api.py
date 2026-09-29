@@ -2,19 +2,11 @@ from datetime import UTC, datetime
 
 from httpx import AsyncClient
 
+from tests.helpers import create_user_token
+
 
 async def _register(client: AsyncClient, username: str, tenant_id: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    return await create_user_token(client, username, tenant_id)
 
 
 async def test_upload_requires_auth(client: AsyncClient) -> None:

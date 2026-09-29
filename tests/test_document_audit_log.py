@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
+from tests.helpers import create_user_token
+
 MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
     b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
@@ -27,18 +29,7 @@ def isolated_storage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 
 async def _register(client: AsyncClient, username: str, tenant_id: str, role: str = "admin") -> str:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-            "role": role,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    return await create_user_token(client, username, tenant_id, role)
 
 
 async def test_document_upload_and_delete_produce_audit_log_entries(client: AsyncClient) -> None:

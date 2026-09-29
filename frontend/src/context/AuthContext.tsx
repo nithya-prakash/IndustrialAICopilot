@@ -2,19 +2,13 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 import type { ReactNode } from "react";
 import * as authApi from "../api/auth";
 import { setToken } from "../api/client";
-import type { User, UserRole } from "../api/types";
+import type { User } from "../api/types";
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (
-    username: string,
-    email: string,
-    password: string,
-    role: UserRole,
-    tenantId: string
-  ) => Promise<void>;
+  register: (username: string, email: string, password: string, tenantId: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -56,16 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (username: string, email: string, password: string, role: UserRole, tenantId: string) => {
+    async (username: string, email: string, password: string, tenantId: string) => {
       setIsLoading(true);
       try {
-        const result = await authApi.register({
-          username,
-          email,
-          password,
-          role,
-          tenant_id: tenantId,
-        });
+        const result = await authApi.register({ username, email, password, tenant_id: tenantId });
         persist(result.user, result.access_token);
       } finally {
         setIsLoading(false);

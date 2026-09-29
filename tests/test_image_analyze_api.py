@@ -5,6 +5,8 @@ import pytest
 from httpx import AsyncClient
 from PIL import Image
 
+from tests.helpers import create_user_token
+
 
 def _make_jpeg_bytes(width: int = 200, height: int = 150) -> bytes:
     image = Image.new("RGB", (width, height), color=(80, 80, 80))
@@ -21,17 +23,7 @@ def isolated_storage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 
 async def _register(client: AsyncClient, username: str, tenant_id: str) -> str:
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "email": f"{username}@example.com",
-            "password": "correct-horse-battery",
-            "tenant_id": tenant_id,
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    return await create_user_token(client, username, tenant_id)
 
 
 async def test_analyze_requires_auth(client: AsyncClient) -> None:
