@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.image_analysis import ImageAnalysis
 from app.models.user import User
 from app.schemas.image import ImageAnalysisResponse
+from app.schemas.limits import EQUIPMENT_FIELD_MAX_CHARS, QUESTION_MAX_CHARS
 from app.services.image_service import (
     ImageTooLargeError,
     UnsupportedImageTypeError,
@@ -44,9 +45,9 @@ def _to_response(record: ImageAnalysis) -> ImageAnalysisResponse:
 async def analyze(
     request: Request,
     file: UploadFile = File(...),
-    equipment_type: str | None = Form(default=None),
-    equipment_id: str | None = Form(default=None),
-    question: str | None = Form(default=None),
+    equipment_type: str | None = Form(default=None, max_length=EQUIPMENT_FIELD_MAX_CHARS),
+    equipment_id: str | None = Form(default=None, max_length=EQUIPMENT_FIELD_MAX_CHARS),
+    question: str | None = Form(default=None, max_length=QUESTION_MAX_CHARS),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageAnalysisResponse:

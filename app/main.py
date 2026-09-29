@@ -1,3 +1,4 @@
+import math
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -5,6 +6,8 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -125,6 +128,30 @@ async def request_context_middleware(
     if settings.is_production:
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
+
+
+def _json_safe(value):
+    """Non-finite floats (NaN/inf) can't be written as JSON."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Same 422 body FastAPI produces by default, except the echoed `input`
+    is made JSON-safe first. A request carrying NaN/Infinity (which Python's
+    and JavaScript's JSON encoders both emit) is correctly rejected, but the
+    default handler then crashed with a 500 trying to echo that NaN back."""
+    return JSONResponse(
+        status_code=422, content={"detail": jsonable_encoder(_json_safe(exc.errors()))}
+    )
 
 
 @app.exception_handler(Exception)

@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.core.rate_limit import limiter
 from app.database import get_db
 from app.models.document import Document, DocumentVersion
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.document import DocumentListResponse, DocumentResponse
+from app.schemas.limits import EQUIPMENT_FIELD_MAX_CHARS
 from app.services.document_service import (
     DocumentNotFoundError,
     FileTooLargeError,
@@ -23,6 +24,12 @@ from app.services.document_service import (
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 _settings = get_settings()
+
+# Manuals are shared by the whole workspace, so anyone can add a new one,
+# but removing one or replacing it with a new version changes what every
+# technician's diagnoses are grounded in — that's a supervisor/admin call.
+_MANAGE_DOCUMENT_ROLES = (UserRole.supervisor, UserRole.admin)
+_require_document_manager = require_roles(*_MANAGE_DOCUMENT_ROLES)
 
 
 def _to_response(
@@ -48,12 +55,17 @@ def _to_response(
 async def upload(
     request: Request,
     file: UploadFile = File(...),
-    equipment_type: str | None = Form(default=None),
-    equipment_id: str | None = Form(default=None),
+    equipment_type: str | None = Form(default=None, max_length=EQUIPMENT_FIELD_MAX_CHARS),
+    equipment_id: str | None = Form(default=None, max_length=EQUIPMENT_FIELD_MAX_CHARS),
     document_id: uuid.UUID | None = Form(default=None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
+    if document_id is not None and user.role not in _MANAGE_DOCUMENT_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only supervisors and admins can upload a new version of an existing manual",
+        )
     try:
         document, version = await upload_document(
             db,
@@ -118,7 +130,7 @@ async def get_one(
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_one(
     document_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_require_document_manager),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     try:

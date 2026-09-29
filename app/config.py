@@ -2,13 +2,22 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The placeholder shipped in .env.example / the default below. Fine for
+# local development; never acceptable once APP_ENV=production.
+PLACEHOLDER_SECRET_KEY = "change-me-to-a-random-64-char-string"
+MIN_PRODUCTION_SECRET_KEY_LENGTH = 32
+
+
+class InsecureConfigError(RuntimeError):
+    pass
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: str = "development"
     log_level: str = "INFO"
-    secret_key: str = "change-me-to-a-random-64-char-string"
+    secret_key: str = PLACEHOLDER_SECRET_KEY
     access_token_expire_minutes: int = 60
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
@@ -95,6 +104,24 @@ class Settings(BaseSettings):
     chunk_target_chars: int = 1000
     chunk_overlap_chars: int = 150
 
+    def check_production_safety(self) -> None:
+        """Every JWT is signed with SECRET_KEY, and the placeholder is public
+        (it's in .env.example on GitHub) — anyone could forge an admin token
+        for any tenant. Refuse to start in production rather than run with it.
+
+        A plain RuntimeError on purpose, not a pydantic validator: a
+        ValidationError's message includes the full settings input, which
+        would print the API keys and database password into the startup log."""
+        if self.is_production and (
+            self.secret_key == PLACEHOLDER_SECRET_KEY
+            or len(self.secret_key) < MIN_PRODUCTION_SECRET_KEY_LENGTH
+        ):
+            raise InsecureConfigError(
+                "SECRET_KEY must be set to a random value of at least "
+                f"{MIN_PRODUCTION_SECRET_KEY_LENGTH} characters when APP_ENV=production "
+                '(e.g. python -c "import secrets; print(secrets.token_urlsafe(64))")'
+            )
+
     @property
     def allowed_upload_content_types_list(self) -> list[str]:
         return [t.strip() for t in self.allowed_upload_content_types.split(",") if t.strip()]
@@ -134,4 +161,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    settings.check_production_safety()
+    return settings

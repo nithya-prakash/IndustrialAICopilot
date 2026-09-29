@@ -1,13 +1,15 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
+from app.schemas.limits import EquipmentField, SensorReadings
 
 
 class SensorSnapshotRequest(BaseModel):
-    equipment_id: str = Field(min_length=1, max_length=128)
-    equipment_type: str | None = None
-    readings: dict[str, float] = Field(min_length=1)
+    equipment_id: EquipmentField
+    equipment_type: EquipmentField | None = None
+    readings: SensorReadings
     recorded_at: datetime | None = None
 
 

@@ -3,14 +3,16 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.limits import EquipmentField, Question, SensorReadings
+
 
 class CopilotQueryRequest(BaseModel):
-    question: str
+    question: Question
     conversation_id: uuid.UUID | None = None
-    equipment_id: str | None = None
-    equipment_type: str | None = None
+    equipment_id: EquipmentField | None = None
+    equipment_type: EquipmentField | None = None
     image_analysis_id: uuid.UUID | None = None
-    sensor_readings: dict[str, float] | None = None
+    sensor_readings: SensorReadings | None = None
 
 
 class CauseResponse(BaseModel):

@@ -116,8 +116,8 @@ async def test_same_tenant_users_share_documents(client: AsyncClient) -> None:
 
 
 async def test_delete_requires_matching_tenant(client: AsyncClient) -> None:
-    token_a = await _register(client, "tech_a", "acme")
-    token_b = await _register(client, "tech_b", "globex")
+    token_a = await create_user_token(client, "sup_a", "acme", role="supervisor")
+    token_b = await create_user_token(client, "sup_b", "globex", role="supervisor")
 
     upload = await client.post(
         "/api/v1/documents/upload",
@@ -135,3 +135,53 @@ async def test_delete_requires_matching_tenant(client: AsyncClient) -> None:
         f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {token_a}"}
     )
     assert same_tenant_delete.status_code == 204
+
+
+async def _upload(client: AsyncClient, token: str, document_id: str | None = None):
+    return await client.post(
+        "/api/v1/documents/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("manual.pdf", MINIMAL_PDF, "application/pdf")},
+        data={"document_id": document_id} if document_id else None,
+    )
+
+
+async def test_technician_can_upload_but_not_delete_a_manual(client: AsyncClient) -> None:
+    tech = await _register(client, "tech_a", "acme")
+    upload = await _upload(client, tech)
+    assert upload.status_code == 201
+    document_id = upload.json()["id"]
+
+    response = await client.delete(
+        f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {tech}"}
+    )
+    assert response.status_code == 403
+
+    still_there = await client.get(
+        f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {tech}"}
+    )
+    assert still_there.status_code == 200
+
+
+async def test_technician_cannot_upload_a_new_version_of_a_manual(client: AsyncClient) -> None:
+    tech = await _register(client, "tech_a", "acme")
+    document_id = (await _upload(client, tech)).json()["id"]
+
+    response = await _upload(client, tech, document_id=document_id)
+    assert response.status_code == 403
+
+    current = await client.get(
+        f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {tech}"}
+    )
+    assert current.json()["version_number"] == 1
+
+
+async def test_supervisor_can_upload_a_new_version_of_a_manual(client: AsyncClient) -> None:
+    tech = await _register(client, "tech_a", "acme")
+    supervisor = await create_user_token(client, "sup_a", "acme", role="supervisor")
+    document_id = (await _upload(client, tech)).json()["id"]
+
+    response = await _upload(client, supervisor, document_id=document_id)
+    assert response.status_code == 201
+    assert response.json()["id"] == document_id
+    assert response.json()["version_number"] == 2

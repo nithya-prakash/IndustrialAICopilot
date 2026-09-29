@@ -12,7 +12,10 @@ openai==1.59.6
 torch==2.13.0+cpu
 sentence-transformers==3.3.1
 rank-bm25==0.2.2
-pypdf==5.1.0
+# Used directly (app/analytics/sensors.py) — pinned explicitly rather than
+# left to whatever sentence-transformers happens to pull in.
+numpy==2.5.3
+scikit-learn==1.9.1
 pdfplumber==0.11.4
 pdf2image==1.17.0
 pytesseract==0.3.13
@@ -23,7 +26,6 @@ python-multipart==0.0.20
 passlib==1.7.4
 bcrypt==4.0.1
 pyjwt==2.10.1
-python-jose[cryptography]==3.3.0
 slowapi==0.1.9
 tenacity==9.0.0
 structlog==24.4.0

@@ -4,6 +4,7 @@ import * as documentsApi from "../api/documents";
 import { ApiError } from "../api/client";
 import type { DocumentSummary } from "../api/types";
 import { DocumentStatusBadge } from "../components/Badges";
+import { useAuth } from "../context/AuthContext";
 
 const PROCESSING_STATUSES = new Set([
   "uploaded",
@@ -16,6 +17,10 @@ const PROCESSING_STATUSES = new Set([
 ]);
 
 export function KnowledgeBasePage() {
+  const { user } = useAuth();
+  // Mirrors the backend rule: anyone can add a manual, only supervisors and
+  // admins can delete one (the API returns 403 regardless).
+  const canManage = user?.role === "supervisor" || user?.role === "admin";
   const [documents, setDocuments] = useState<DocumentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -158,9 +163,11 @@ export function KnowledgeBasePage() {
                   </td>
                   <td style={{ padding: "10px 8px" }}>{doc.chunk_count}</td>
                   <td style={{ padding: "10px 8px", textAlign: "right" }}>
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleDelete(doc.id)}>
-                      Delete
-                    </button>
+                    {canManage && (
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleDelete(doc.id)}>
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
