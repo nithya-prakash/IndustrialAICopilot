@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_user_by_email, get_user_by_username
-from app.core.security import hash_password, verify_password
+from app.core.security import dummy_verify_password, hash_password, verify_password
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 from app.services.audit_service import log_event
@@ -178,6 +178,13 @@ async def update_tenant_user(
 
 async def authenticate_user(db: AsyncSession, *, username: str, password: str) -> User:
     user = await get_user_by_username(db, username)
-    if user is None or not user.is_active or not verify_password(password, user.hashed_password):
+    # Every path does exactly one bcrypt check (real or dummy), and the
+    # password is checked before is_active, so unknown, deactivated, and
+    # wrong-password logins all take the same time and give the same answer.
+    if user is None:
+        dummy_verify_password()
+        raise InvalidCredentialsError(username)
+    password_ok = verify_password(password, user.hashed_password)
+    if not password_ok or not user.is_active:
         raise InvalidCredentialsError(username)
     return user

@@ -22,6 +22,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return _pwd_context.verify(plain_password, hashed_password)
 
 
+def dummy_verify_password() -> None:
+    """Spends the same bcrypt time as a real verify, for a login attempt with
+    no user to check against — otherwise "no such user" answers measurably
+    faster than "wrong password" and leaks which usernames exist."""
+    _pwd_context.dummy_verify()
+
+
 def create_access_token(*, subject: uuid.UUID, role: str) -> str:
     now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.access_token_expire_minutes)

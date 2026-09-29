@@ -163,3 +163,46 @@ async def test_logging_out_one_users_token_does_not_affect_another(
     )
     assert still_valid.status_code == 200
     assert still_valid.json()["username"] == "tech_b"
+
+
+async def test_unknown_user_login_costs_the_same_bcrypt_work_as_a_wrong_password(
+    client: AsyncClient, monkeypatch
+) -> None:
+    """Unknown usernames used to skip bcrypt entirely and answer faster than
+    a wrong password, revealing which usernames exist. Now every failed login
+    runs exactly one bcrypt verification and gets the identical 401."""
+    from app.core import security
+
+    bcrypt_checks = {"n": 0}
+    real_verify = security._pwd_context.verify
+
+    def counting_verify(*args, **kwargs):
+        bcrypt_checks["n"] += 1
+        return real_verify(*args, **kwargs)
+
+    # passlib's dummy_verify() also goes through verify(), so this counts both.
+    monkeypatch.setattr(security._pwd_context, "verify", counting_verify)
+
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "tech_jane",
+            "email": "jane@example.com",
+            "password": "correct-horse-battery",
+            "tenant_id": "tech_jane_co",
+        },
+    )
+
+    async def failed_login(username: str, password: str):
+        bcrypt_checks["n"] = 0
+        response = await client.post(
+            "/api/v1/auth/login", json={"username": username, "password": password}
+        )
+        return response, bcrypt_checks["n"]
+
+    unknown, unknown_checks = await failed_login("nobody", "whatever-123")
+    wrong, wrong_checks = await failed_login("tech_jane", "wrong-password")
+
+    assert unknown.status_code == wrong.status_code == 401
+    assert unknown.json() == wrong.json()
+    assert unknown_checks == wrong_checks == 1

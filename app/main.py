@@ -28,6 +28,7 @@ from app.api.routes import (
 )
 from app.config import get_settings
 from app.core.rate_limit import limiter
+from app.core.security import dummy_verify_password
 from app.logging_config import configure_logging, get_logger
 from app.observability.metrics import (
     http_request_duration_seconds,
@@ -60,6 +61,10 @@ async def lifespan(_app: FastAPI):
     # that simply never appears in /metrics when unconfigured (see that
     # gauge's own docstring in app/observability/metrics.py).
     llm_cost_tracking_configured.set(1 if is_cost_tracking_configured(settings) else 0)
+    # passlib builds its dummy hash lazily on first use, which would make the
+    # very first unknown-username login ~2x slower than every later one —
+    # build it now so even that first request doesn't reveal anything.
+    dummy_verify_password()
     yield
 
 

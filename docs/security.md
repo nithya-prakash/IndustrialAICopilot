@@ -20,13 +20,22 @@ plainly as the things that are actually enforced.
 - Every authenticated request re-fetches the user and checks
   `user.is_active` (`app/core/deps.py:get_current_user`) — deactivating a
   user blocks their existing, unexpired tokens on the very next request,
-  not just future logins. This is a real, if partial, mitigation for the
-  gap below.
-
-**Known gap:** there is no token revocation/blocklist beyond the
-`is_active` check above. A stolen token remains valid for the rest of its
-(short, 60-minute-default) lifetime even if the user is not deactivated.
-Documented as a known limitation since Phase 1, not discovered late.
+  not just future logins.
+- Token revocation: `POST /api/v1/auth/logout` adds the token's `jti` to a
+  Redis blocklist (`app/core/token_blocklist.py`) with a TTL equal to the
+  token's remaining lifetime, and every authenticated request checks it —
+  a logged-out token stops working immediately instead of living out its
+  expiry. If Redis is unreachable the check fails closed (the request
+  errors) rather than silently accepting a possibly-revoked token.
+- Login gives no hint whether a username exists: unknown users, wrong
+  passwords, and deactivated accounts all get the same `401`, and every
+  failed attempt runs exactly one bcrypt check (a passlib dummy verify when
+  there's no user), so response time doesn't reveal it either. Live
+  measurement: ~0.375s for both an unknown username and a wrong password.
+- `SECRET_KEY` signs every token, and the `.env.example` placeholder is
+  public — so with `APP_ENV=production` the app refuses to start with the
+  placeholder or any key under 32 characters (`app/config.py`), with an
+  error that doesn't echo other settings into the log.
 
 ## Sign-up and user management
 
@@ -52,8 +61,17 @@ Documented as a known limitation since Phase 1, not discovered late.
   (`app/models/user.py`) — enforced server-side via `require_roles()`
   (`app/core/deps.py`), applied as a FastAPI dependency on the route
   itself (e.g. `/api/v1/diagnoses/{id}/approve` requires
-  `supervisor`/`admin`; `/api/v1/audit-logs` requires `admin`), not
-  re-checked ad hoc inside a generic handler.
+  `supervisor`/`admin`; `/api/v1/audit-logs` and `/api/v1/users` require
+  `admin`), not re-checked ad hoc inside a generic handler.
+- Deleting a manual, or uploading a new version of an existing one,
+  requires `supervisor`/`admin` — manuals are shared by the whole
+  workspace and ground every technician's diagnoses. Any role can add a new
+  manual.
+- Human-in-the-loop approval is a genuine second opinion: a supervisor
+  can't approve or reject a diagnosis they requested themselves (`403`),
+  and each diagnosis is decided once — enforced by a unique constraint, so
+  two supervisors deciding at the same moment get one `200` and one `409`,
+  never two decisions or a `500`.
 - The frontend also hides nav items and blocks client-side navigation for
   roles that can't use a feature (`frontend/src/components/
   ProtectedRoute.tsx`) — this is UX convenience only. The real boundary is
@@ -92,6 +110,13 @@ Documented as a known limitation since Phase 1, not discovered late.
   validation also strips EXIF metadata (phone photos commonly carry GPS
   coordinates) as a side effect of the same step, not a separate policy
   someone has to remember.
+- **Size limits on client text** (`app/schemas/limits.py`): questions
+  sent to the LLM/VLM are capped at 2,000 characters (every token is
+  billed), equipment IDs/types at 128 and sensor metric names at 64
+  (matching their DB columns, which previously failed as a `500`), and a
+  sensor upload at 50 readings. NaN/Infinity sensor values are rejected —
+  and the `422` for them is itself JSON-safe (FastAPI's default handler
+  crashed trying to echo NaN back).
 - Both upload paths store files under a generated identifier, not the
   client-supplied filename, avoiding path-traversal via a crafted
   filename.
@@ -169,6 +194,9 @@ data**, not instructions:
   baked into the image at build time (the one exception,
   `VITE_API_BASE_URL` for the frontend, is a public API base URL the
   browser needs anyway, not a secret).
+- The production start-up guard on `SECRET_KEY` (see Authentication above)
+  means a deployment can't accidentally run with the published
+  placeholder key.
 
 ## The `/metrics` endpoint is deliberately unauthenticated
 
@@ -186,7 +214,8 @@ Prometheus doesn't have a way to send.
 
 `AuditLog` (Phase 7, `app/models/audit_log.py`) is an append-only record
 of compliance-sensitive actions — diagnosis creation/failure, approval
-decisions, document upload/deletion — each entry naming the actor, the
+decisions, document upload/deletion, workspace creation, and user
+creation/role/active-status changes — each entry naming the actor, the
 resource, and action-specific detail. Readable only by `admin`
 (`GET /api/v1/audit-logs`). Scoped to these specific actions rather than
 every mutating endpoint in the system (documented as a scope limit in
@@ -196,13 +225,9 @@ new architecture.
 
 ## Known gaps (accepted, not hidden)
 
-- No token revocation/blocklist beyond the per-request `is_active` check
-  above.
 - `/metrics` relies on network-level isolation that this local Docker
   Compose setup doesn't actually enforce (host port 8000 is reachable
   directly).
-- The Celery worker process is not covered by the Phase 9 observability
-  setup — see that phase's ADR entry for what adding it would take.
 - Rate limiting is per-client-IP via `slowapi`'s default key function,
   which is easy to defeat behind a shared NAT/proxy in a way a real
   production deployment would need to account for (e.g. keying on
