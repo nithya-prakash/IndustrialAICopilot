@@ -13,11 +13,12 @@ for the design rationale behind every non-obvious choice below, and
 [`docs/security.md`](docs/security.md) for the security model
 specifically.
 
-![Demo: register, dashboard, real document upload with live ingestion status, AI Copilot query form](docs/images/demo.gif)
+![Demo: create a workspace, dashboard, admin adds a supervisor, real manual upload through the ingestion pipeline, AI Copilot query form](docs/images/demo.gif)
 
-*Real app, real backend, real data — registration, the dashboard, a live
-document upload progressing through the real ingestion pipeline, and the
-AI Copilot query form. Captured directly against the running stack, not
+*Real app, real backend, real data — creating a company workspace (you
+become its admin), the dashboard, adding a supervisor from the Users page,
+a manual upload going through the real ingestion pipeline to "ready", and
+the AI Copilot query form. Captured directly against the running stack, not
 staged.*
 
 ## Why this exists
@@ -43,6 +44,11 @@ completion was verified against real infrastructure, not asserted.
 - Multimodal input (vision + structured sensor time-series) feeding one
   evidence pipeline
 - Human-in-the-loop approval as a first-class workflow, not a bolt-on
+- Multi-tenant security: sign-up creates your own
+  company workspace (nobody can join another company or pick their own
+  role), role-based access enforced server-side, per-tenant data
+  isolation, token revocation, and audit logging — see
+  [`docs/security.md`](docs/security.md)
 - Production-adjacent infra: Prometheus/Grafana observability, an
   evaluation harness with real measured metrics (not asserted ones), and
   CI across backend/frontend/Docker
@@ -115,15 +121,21 @@ run this end to end.
   sensor history, image analysis, maintenance schedule, safe calculator,
   report generation), deterministic confidence scoring, structural
   citation validation across all evidence types
-- **Human-in-the-loop**: role-gated supervisor approve/reject workflow,
-  append-only audit log
+- **Auth & tenancy**: JWT auth with logout revocation (Redis blocklist);
+  sign-up creates a new company workspace with you as its admin, and admins
+  add supervisors/technicians from a Users page; every query scoped to the
+  caller's tenant
+- **Human-in-the-loop**: role-gated supervisor approve/reject workflow —
+  a supervisor can't sign off on their own diagnosis, and each diagnosis
+  is decided exactly once — plus an append-only audit log
 - **Frontend**: React 19 + Vite + TypeScript, hand-rolled CSS design
   system, role-aware SPA (Dashboard, Knowledge Base, AI Copilot, Evidence
-  panel, Approval Dashboard, Audit Log)
+  panel, Approval Dashboard, Users, Audit Log)
 - **Observability**: Prometheus metrics (HTTP, LLM/VLM calls + token usage,
   agent tool calls, diagnoses, approvals) + Grafana dashboard, on top of
   structured logging (structlog)
-- **Infra**: Docker Compose
+- **Infra**: Docker Compose (all ports bound to localhost, password-protected
+  Redis), GitHub Actions CI
 
 ## Local setup
 
@@ -131,6 +143,12 @@ run this end to end.
 cp .env.example .env   # then set ANTHROPIC_API_KEY if you want live LLM calls
 docker compose up --build
 ```
+
+Open http://localhost:3002 and choose **Create a workspace** — you become
+that workspace's admin, and can add supervisors and technicians from the
+**Users** page. (For anything beyond local use, set `APP_ENV=production`
+and a real `SECRET_KEY` — the app refuses to start in production with the
+placeholder key.)
 
 No budget for API credits? Set `LLM_PROVIDER=openai`, `LLM_MODEL=llama3.2:3b`,
 `LLM_BASE_URL=http://host.docker.internal:11434/v1` and run a local
@@ -196,9 +214,11 @@ extensions this project could reasonably grow into, not commitments:
   structure in inconsistently formatted documents. OCR'd pages have no font
   metadata at all, so heading detection there falls back to a weaker
   text-pattern heuristic (numbered/ALL-CAPS headings).
-- BM25 is recomputed per query over the tenant-scoped candidate set fetched
-  from Postgres rather than a persistent index — fine at portfolio scale,
-  documented as a scaling limitation in the ADR.
+- BM25 is built in memory from the tenant-scoped candidate set in Postgres
+  and cached per process for 60 seconds, rather than kept as a persistent
+  keyword index — fine at portfolio scale, documented as a scaling
+  limitation in the ADR. A newly ingested manual can take up to that long to
+  show up in keyword (not dense) results.
 - **Claude/Anthropic path not live-verified**: no Anthropic API credits are
   configured in this environment, so Claude-specific agent reasoning, VLM
   accuracy, and diagnosis evaluation have never been exercised end-to-end
