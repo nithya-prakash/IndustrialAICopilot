@@ -1,4 +1,10 @@
-fastapi==0.115.6
+fastapi==0.142.2
+# Pinned explicitly: these arrive transitively (via fastapi, pdfplumber,
+# sentence-transformers) but have had security advisories, so their
+# versions shouldn't drift with whatever the parent package allows.
+starlette==1.7.0
+pdfminer.six==20260107
+transformers==5.18.0
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
@@ -10,26 +16,26 @@ qdrant-client==1.12.1
 anthropic==0.42.0
 openai==1.59.6
 torch==2.13.0+cpu
-sentence-transformers==3.3.1
+sentence-transformers==5.7.0
 rank-bm25==0.2.2
 # Used directly (app/analytics/sensors.py) — pinned explicitly rather than
 # left to whatever sentence-transformers happens to pull in.
 numpy==2.5.3
 scikit-learn==1.9.1
-pdfplumber==0.11.4
+pdfplumber==0.11.10
 pdf2image==1.17.0
 pytesseract==0.3.13
-Pillow==11.0.0
+Pillow==12.3.0
 celery==5.4.0
 redis==5.2.1
-python-multipart==0.0.20
+python-multipart==0.0.32
 passlib==1.7.4
 bcrypt==4.0.1
-pyjwt==2.10.1
+pyjwt==2.15.1
 slowapi==0.1.9
 tenacity==9.0.0
 structlog==24.4.0
 prometheus-client==0.21.1
 httpx==0.28.1
-python-dotenv==1.0.1
+python-dotenv==1.2.4
 greenlet==3.1.1

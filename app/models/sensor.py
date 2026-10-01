@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,18 @@ class SensorReading(UUIDPkMixin, TimestampMixin, Base):
     lets new metrics show up without a schema change."""
 
     __tablename__ = "sensor_readings"
+    # Matches query_sensor_history's access pattern; created by migration
+    # c4f8b2a6d9e1. Declared here too so `alembic revision --autogenerate`
+    # doesn't see it as stray and generate a migration that drops it.
+    __table_args__ = (
+        Index(
+            "ix_sensor_readings_query_pattern",
+            "tenant_id",
+            "equipment_id",
+            "metric",
+            "recorded_at",
+        ),
+    )
 
     tenant_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     owner_id: Mapped[uuid.UUID] = mapped_column(

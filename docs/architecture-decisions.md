@@ -487,6 +487,13 @@ The worker runs as multiple forked processes (`--concurrency=2`) and doesn't ser
 ### Why is `/metrics` unauthenticated, unlike every other endpoint in this API?
 Prometheus's scraper has no user session and no bearer token to present — requiring JWT auth on `/metrics` would mean either giving Prometheus a standing credential (a real secret-management problem for a metrics scraper) or the endpoint simply never getting scraped. This matches standard Prometheus practice: the real access control for `/metrics` is network-level (only the scraper's network can reach it), not application-level. Locally, that boundary is the Docker compose network — the docker-compose port mapping is honest about the trade-off (host port 8000 also exposes it, bound to `127.0.0.1` so only to the local machine), which a real deployment would close by firewalling the metrics port to the Prometheus network specifically. Documented here rather than left implicit, since it's the one endpoint in this API that deliberately breaks the "everything needs a token" pattern.
 
+*Later correction:* the claim above that Prometheus has "no bearer token to
+present" was wrong — Prometheus scrape configs support an `authorization`
+block. `/metrics` now accepts an optional `METRICS_TOKEN` bearer token that
+docker-compose passes to both the backend and Prometheus (see
+`docs/security.md`); it stays open on the local stack by default and is
+required when `APP_ENV=production`.
+
 ## Phase 10
 
 ### Why structural/deterministic scoring (tool_recall, evidence_type_coverage, citation_validity_rate, meets_severity_floor) instead of an LLM-as-judge quality score?

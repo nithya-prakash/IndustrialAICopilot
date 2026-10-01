@@ -20,7 +20,9 @@ WORKDIR /app
 ARG INSTALL_DEV=false
 
 COPY requirements.txt requirements-dev.txt ./
-RUN pip install --no-cache-dir \
+# The base image's own pip/setuptools carry known advisories.
+RUN pip install --no-cache-dir --upgrade pip==26.2.1 setuptools==84.0.0 \
+    && pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
     torch==2.13.0+cpu \
     && pip install --no-cache-dir \

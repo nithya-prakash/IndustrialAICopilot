@@ -147,8 +147,8 @@ docker compose up --build
 Open http://localhost:3002 and choose **Create a workspace** — you become
 that workspace's admin, and can add supervisors and technicians from the
 **Users** page. (For anything beyond local use, set `APP_ENV=production`
-and a real `SECRET_KEY` — the app refuses to start in production with the
-placeholder key.)
+along with a real `SECRET_KEY`, non-default Postgres/Redis passwords, and a
+`METRICS_TOKEN` — the app refuses to start in production without them.)
 
 No budget for API credits? Set `LLM_PROVIDER=openai`, `LLM_MODEL=llama3.2:3b`,
 `LLM_BASE_URL=http://host.docker.internal:11434/v1` and run a local

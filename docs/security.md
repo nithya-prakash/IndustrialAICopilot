@@ -33,9 +33,12 @@ plainly as the things that are actually enforced.
   there's no user), so response time doesn't reveal it either. Live
   measurement: ~0.375s for both an unknown username and a wrong password.
 - `SECRET_KEY` signs every token, and the `.env.example` placeholder is
-  public — so with `APP_ENV=production` the app refuses to start with the
-  placeholder or any key under 32 characters (`app/config.py`), with an
-  error that doesn't echo other settings into the log.
+  public. With `APP_ENV=production` the app refuses to start unless
+  `SECRET_KEY` is a non-placeholder value of at least 32 characters, the
+  Postgres and Redis passwords (in `DATABASE_URL`/`REDIS_URL`) are set,
+  non-default, and at least 12 characters, and `METRICS_TOKEN` is set
+  (`app/config.py`). Every problem is reported at once, by setting name
+  only — the error never echoes a value into the log.
 
 ## Sign-up and user management
 
@@ -194,9 +197,9 @@ data**, not instructions:
   baked into the image at build time (the one exception,
   `VITE_API_BASE_URL` for the frontend, is a public API base URL the
   browser needs anyway, not a secret).
-- The production start-up guard on `SECRET_KEY` (see Authentication above)
-  means a deployment can't accidentally run with the published
-  placeholder key.
+- The production start-up guard (see Authentication above) means a
+  deployment can't accidentally run with the published placeholder key,
+  the docker-compose default service passwords, or an open `/metrics`.
 
 ## Local stack exposure
 
@@ -209,18 +212,21 @@ data**, not instructions:
   `GRAFANA_ADMIN_PASSWORD` rather than being fixed in the compose file.
   Grafana keeps anonymous read-only viewing for the local demo.
 
-## The `/metrics` endpoint is deliberately unauthenticated
+## The `/metrics` endpoint and its token
 
-Unlike every other endpoint in this API, `GET /metrics` (Phase 9) takes
-no bearer token — Prometheus's scraper has none to present. The real
-access control for this endpoint is meant to be network-level (only the
-scraper's network can reach it), not application-level; in this local
-Docker Compose setup that boundary is the compose network, and the port
-mapping is honest about the trade-off (host port 8000 also exposes it —
-bound to `127.0.0.1`, so only to this machine, not the network). A real
-deployment would close this by firewalling the metrics
-port to the Prometheus network specifically, not by adding a token
-Prometheus doesn't have a way to send.
+`GET /metrics` doesn't take a user's JWT — Prometheus has no user session —
+but it can be protected with its own bearer token. When `METRICS_TOKEN` is
+set, the endpoint requires `Authorization: Bearer <METRICS_TOKEN>` (compared
+in constant time), and Prometheus sends exactly that via the `authorization`
+block in `observability/prometheus/prometheus.yml`; docker-compose hands the
+same value to both. Left unset, the endpoint is open — the local-stack
+default, where it's only reachable from this machine (`127.0.0.1`).
+`APP_ENV=production` refuses to start without a token.
+
+The Celery worker's metrics port (8001) is served by `prometheus_client`'s
+built-in HTTP server, which has no authentication option — in a real
+deployment it should simply not be published outside the scraper's
+network (here it's bound to `127.0.0.1`).
 
 ## Audit logging
 
@@ -237,9 +243,9 @@ new architecture.
 
 ## Known gaps (accepted, not hidden)
 
-- `/metrics` relies on network-level isolation. Locally every published
-  port is bound to `127.0.0.1`, so it's reachable from this machine but not
-  the network; a real deployment would firewall it to the scraper.
+- The worker's metrics port has no authentication of its own (see
+  "The `/metrics` endpoint and its token") and relies on not being
+  published beyond the scraper's network.
 - Rate limiting is per-client-IP via `slowapi`'s default key function,
   which is easy to defeat behind a shared NAT/proxy in a way a real
   production deployment would need to account for (e.g. keying on

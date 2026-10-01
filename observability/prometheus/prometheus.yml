@@ -5,6 +5,13 @@ global:
 scrape_configs:
   - job_name: industrial-copilot-backend
     metrics_path: /metrics
+    # The backend requires this bearer token on /metrics when METRICS_TOKEN
+    # is set (always, in production). docker-compose writes the token to
+    # this file at start-up; when it's unset the file is empty and the
+    # backend leaves /metrics open, as on the local stack by default.
+    authorization:
+      type: Bearer
+      credentials_file: /tmp/metrics_token
     static_configs:
       - targets: ["backend:8000"]
   - job_name: industrial-copilot-worker

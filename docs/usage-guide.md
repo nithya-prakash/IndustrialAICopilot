@@ -141,7 +141,9 @@ the README's Known limitations.
 ## Try the approval workflow
 
 ```bash
-# as a supervisor or admin registered in the same tenant as the diagnosis:
+# as a supervisor or admin in the same workspace (added by its admin via
+# POST /api/v1/users) — not the person who asked for the diagnosis, since
+# self-approval is refused with a 403:
 curl -X POST localhost:8000/api/v1/diagnoses/$DIAGNOSIS_ID/approve \
   -H "Authorization: Bearer $SUPERVISOR_TOKEN" -H "Content-Type: application/json" \
   -d '{"comments":"Confirmed via evidence review."}'
@@ -159,7 +161,8 @@ review the full audit trail: `GET /api/v1/audit-logs`.
 docker compose up --build frontend
 ```
 
-Open http://localhost:3002 — register (or log in), then:
+Open http://localhost:3002 — choose **Create a workspace** (you become its
+admin) or log in, then:
 
 - **Dashboard** — diagnosis/document/approval stats at a glance
 - **Knowledge Base** — upload a manual, watch its status poll live through
@@ -168,6 +171,8 @@ Open http://localhost:3002 — register (or log in), then:
   current sensor readings, get back a structured, cited diagnosis
 - **Approvals** (supervisor/admin) — approve/reject diagnoses flagged
   `requires_human_approval`
+- **Users** (admin) — add supervisors and technicians to your workspace,
+  change roles, deactivate accounts
 - **Audit Log** (admin) — the full compliance event trail
 
 Role-based UI gating (nav items hidden, routes redirect) mirrors the
@@ -186,11 +191,16 @@ docker compose up --build backend prometheus grafana
 ```
 
 - **Raw metrics**: http://localhost:8000/metrics (Prometheus text format —
-  unauthenticated by design, see the ADR)
+  open by default on the local stack; set `METRICS_TOKEN` in `.env` to
+  require a bearer token, which Prometheus is then given automatically —
+  see `docs/security.md`)
 - **Prometheus**: http://localhost:9091 — confirm the scrape target is
   `up` under Status > Targets, or run a query like `diagnoses_total`
-- **Grafana**: http://localhost:3003 (login `admin`/`admin`, or browse
-  anonymously — read-only viewer access is enabled for local convenience)
+- **Grafana**: http://localhost:3003 (login `admin` with
+  `GRAFANA_ADMIN_PASSWORD` from `.env` — Grafana only reads it when it
+  first creates its data volume, so an existing install keeps its earlier
+  password — or browse anonymously; read-only viewer access is enabled for
+  local convenience)
   → Dashboards → "Industrial Copilot", pre-provisioned with panels for
   HTTP request rate/latency, LLM/VLM call rate/latency/token usage, agent
   tool-call rate, diagnoses created, confidence distribution, and approval

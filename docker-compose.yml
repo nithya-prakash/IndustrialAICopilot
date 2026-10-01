@@ -67,6 +67,8 @@ services:
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       REDIS_URL: redis://:${REDIS_PASSWORD:-copilot-redis}@redis:6379/0
+      # Same value Prometheus is given below, so the two can't disagree.
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -152,6 +154,20 @@ services:
   prometheus:
     image: prom/prometheus:v2.55.1
     restart: unless-stopped
+    # Prometheus can't read environment variables in its config, so the
+    # backend's METRICS_TOKEN is written to the credentials_file that
+    # observability/prometheus/prometheus.yml points at, then the image's
+    # normal command runs.
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        printf '%s' "$$METRICS_TOKEN" > /tmp/metrics_token &&
+        exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml
+        --storage.tsdb.path=/prometheus
+        --web.console.libraries=/usr/share/prometheus/console_libraries
+        --web.console.templates=/usr/share/prometheus/consoles
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus

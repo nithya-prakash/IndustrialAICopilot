@@ -1,3 +1,4 @@
+import hmac
 import math
 import re
 import time
@@ -178,17 +179,31 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 @app.get("/metrics", include_in_schema=False)
-async def metrics() -> Response:
+async def metrics(request: Request) -> Response:
     """Scraped by Prometheus (see docker-compose.yml + observability/prometheus/).
-    Intentionally unauthenticated, matching standard Prometheus practice —
-    Prometheus has no bearer token to send. Reachable only from the compose
-    network in normal operation; a real deployment would firewall this port
-    to the scraper's network rather than rely on obscurity, same as any
-    other internal-only endpoint."""
+
+    When METRICS_TOKEN is set, a matching `Authorization: Bearer <token>`
+    header is required — Prometheus sends one via its scrape config's
+    `authorization` block. Left unset, the endpoint is open: the local
+    stack's default, where every port is bound to 127.0.0.1. Production
+    refuses to start without a token (app/config.py)."""
+    if settings.metrics_token:
+        supplied = request.headers.get("authorization", "")
+        expected = f"Bearer {settings.metrics_token}"
+        if not hmac.compare_digest(supplied.encode(), expected.encode()):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Not authenticated"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-app.include_router(health.router, prefix="/api/v1")
+# Every router declares its own full prefix (APIRouter(prefix=...)) rather
+# than getting one here: newer FastAPI versions keep an include-time prefix
+# out of the matched route's path, which would turn this router's metric
+# label into "/health" instead of "/api/v1/health".
+app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(images.router)

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,6 +7,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # local development; never acceptable once APP_ENV=production.
 PLACEHOLDER_SECRET_KEY = "change-me-to-a-random-64-char-string"
 MIN_PRODUCTION_SECRET_KEY_LENGTH = 32
+# The local-stack defaults from docker-compose.yml / .env.example, plus a
+# few obvious ones. Fine on a laptop; never in production.
+KNOWN_DEFAULT_SERVICE_PASSWORDS = {
+    "copilot",
+    "copilot-redis",
+    "postgres",
+    "password",
+    "admin",
+    "change-me",
+}
+MIN_PRODUCTION_SERVICE_PASSWORD_LENGTH = 12
+MIN_PRODUCTION_METRICS_TOKEN_LENGTH = 32
+
+
+def _weak_url_password(url: str) -> bool:
+    password = urlsplit(url).password
+    return (
+        not password
+        or password in KNOWN_DEFAULT_SERVICE_PASSWORDS
+        or len(password) < MIN_PRODUCTION_SERVICE_PASSWORD_LENGTH
+    )
 
 
 class InsecureConfigError(RuntimeError):
@@ -94,6 +116,11 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
 
+    # Bearer token required on GET /metrics when set (Prometheus sends it via
+    # its scrape config). Empty = open, the local-stack default; required
+    # when APP_ENV=production. See docs/security.md.
+    metrics_token: str = ""
+
     data_dir: str = "data"
     max_upload_size_bytes: int = 50 * 1024 * 1024  # 50MB
     allowed_upload_content_types: str = "application/pdf"
@@ -105,21 +132,46 @@ class Settings(BaseSettings):
     chunk_overlap_chars: int = 150
 
     def check_production_safety(self) -> None:
-        """Every JWT is signed with SECRET_KEY, and the placeholder is public
-        (it's in .env.example on GitHub) — anyone could forge an admin token
-        for any tenant. Refuse to start in production rather than run with it.
+        """Refuse to start in production with any of the local-demo
+        credentials. The SECRET_KEY placeholder is public (it's in
+        .env.example on GitHub), so anyone could forge an admin token for any
+        tenant; the Postgres/Redis passwords are the docker-compose defaults;
+        and without METRICS_TOKEN, /metrics is open to whoever can reach it.
 
         A plain RuntimeError on purpose, not a pydantic validator: a
         ValidationError's message includes the full settings input, which
-        would print the API keys and database password into the startup log."""
-        if self.is_production and (
+        would print the API keys and database password into the startup log.
+        Problems are reported by setting name only, never by value."""
+        if not self.is_production:
+            return
+        problems = []
+        if (
             self.secret_key == PLACEHOLDER_SECRET_KEY
             or len(self.secret_key) < MIN_PRODUCTION_SECRET_KEY_LENGTH
         ):
-            raise InsecureConfigError(
-                "SECRET_KEY must be set to a random value of at least "
-                f"{MIN_PRODUCTION_SECRET_KEY_LENGTH} characters when APP_ENV=production "
+            problems.append(
+                f"SECRET_KEY must be a random value of at least "
+                f"{MIN_PRODUCTION_SECRET_KEY_LENGTH} characters "
                 '(e.g. python -c "import secrets; print(secrets.token_urlsafe(64))")'
+            )
+        if _weak_url_password(self.database_url):
+            problems.append(
+                "DATABASE_URL must carry a non-default database password of at least "
+                f"{MIN_PRODUCTION_SERVICE_PASSWORD_LENGTH} characters"
+            )
+        if _weak_url_password(self.redis_url):
+            problems.append(
+                "REDIS_URL must carry a non-default Redis password of at least "
+                f"{MIN_PRODUCTION_SERVICE_PASSWORD_LENGTH} characters"
+            )
+        if len(self.metrics_token) < MIN_PRODUCTION_METRICS_TOKEN_LENGTH:
+            problems.append(
+                f"METRICS_TOKEN must be set (at least {MIN_PRODUCTION_METRICS_TOKEN_LENGTH} "
+                "characters) so /metrics isn't open"
+            )
+        if problems:
+            raise InsecureConfigError(
+                "Refusing to start with APP_ENV=production: " + "; ".join(problems)
             )
 
     @property
