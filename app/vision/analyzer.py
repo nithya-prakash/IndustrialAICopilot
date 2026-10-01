@@ -141,14 +141,19 @@ async def _anthropic_vision(image_bytes: bytes, media_type: str, user_prompt: st
 
 async def _openai_vision(image_bytes: bytes, media_type: str, user_prompt: str) -> str:
     settings = get_settings()
-    if not settings.resolved_vision_api_key:
+    if not settings.resolved_vision_api_key and not settings.vision_base_url:
         raise VisionError(
-            "No OpenAI API key configured (set OPENAI_API_KEY or VISION_API_KEY)"
+            "No OpenAI API key configured (set OPENAI_API_KEY or VISION_API_KEY, "
+            "or VISION_BASE_URL for a local OpenAI-compatible server)"
         )
 
     import openai
 
-    client = openai.AsyncOpenAI(api_key=settings.resolved_vision_api_key)
+    # A local server (e.g. Ollama) ignores the key, but the client requires one.
+    client = openai.AsyncOpenAI(
+        api_key=settings.resolved_vision_api_key or "not-needed-for-local-server",
+        base_url=settings.vision_base_url or None,
+    )
     encoded = base64.b64encode(image_bytes).decode()
     data_url = f"data:{media_type};base64,{encoded}"
     start = time.perf_counter()

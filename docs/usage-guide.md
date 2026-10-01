@@ -208,6 +208,6 @@ docker compose up --build backend prometheus grafana
 
 Every panel is wired to real, currently-empty-or-populated data, not a
 mock — the HTTP panels populate immediately from normal API traffic; the
-LLM/VLM panels show "No data" until a real Anthropic call succeeds (see
-the README's Known limitations), and the diagnosis/approval panels
+LLM/VLM panels show "No data" until a real model call succeeds — Anthropic,
+or a free local Ollama model (see the README's Local setup), and the diagnosis/approval panels
 populate as soon as you run the copilot/approval flows above.

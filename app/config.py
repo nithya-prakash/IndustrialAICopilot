@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     openai_vision_model: str = "gpt-4o-mini"
     vision_provider: str = "anthropic"  # "anthropic" | "openai"
     vision_api_key: str = ""  # falls back to anthropic_api_key/openai_api_key if empty
+    # With VISION_PROVIDER=openai: any OpenAI-compatible server, e.g. a local
+    # Ollama vision model (http://host.docker.internal:11434/v1 +
+    # OPENAI_VISION_MODEL=qwen2.5vl:3b) — no API key or cost needed.
+    vision_base_url: str = ""
 
     max_image_size_bytes: int = 15 * 1024 * 1024  # 15MB
     allowed_image_content_types: str = "image/jpeg,image/png,image/webp"

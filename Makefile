@@ -25,6 +25,7 @@ test:
 		-e LLM_API_KEY= \
 		-e LLM_BASE_URL= \
 		-e VISION_API_KEY= \
+		-e VISION_BASE_URL= \
 		backend pytest -q
 
 test-live:

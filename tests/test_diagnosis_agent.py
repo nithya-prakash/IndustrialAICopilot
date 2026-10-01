@@ -285,6 +285,78 @@ async def test_max_iterations_exhausted_marks_failed(db_session: AsyncSession, m
     )
 
     assert diagnosis.status == DiagnosisStatus.failed
+    # Told plainly why, not a misleading "invalid JSON" parse error.
+    assert "did not produce a final answer" in diagnosis.error_message
+    # MAX_ITERATIONS tool rounds plus the one final-answer nudge, no more.
+    from app.agents.diagnosis_agent import MAX_ITERATIONS
+
+    assert model.call_count == MAX_ITERATIONS + 1
+
+
+async def test_model_answers_after_final_answer_nudge(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    """A model that keeps re-querying tools (typical of small open models)
+    gets one nudge to answer from the evidence it already has, instead of
+    the whole diagnosis failing."""
+    from app.agents.diagnosis_agent import FINAL_ANSWER_NUDGE, MAX_ITERATIONS
+
+    seen_messages: list[list[dict]] = []
+    tool_turns = [
+        _tool_use(ModelToolCall(id=f"call_{i}", name="calculate", input={"expression": "1+1"}))
+        for i in range(MAX_ITERATIONS)
+    ]
+    scripted = ScriptedModel([*tool_turns, _end_turn(DIAGNOSIS_JSON_NO_CITATIONS)])
+
+    async def model(messages, system):
+        seen_messages.append(list(messages))
+        return await scripted(messages, system)
+
+    monkeypatch.setattr(
+        "app.agents.diagnosis_agent.execute_tool",
+        _fake_execute_tool_factory({"calculate": ToolExecutionResult(output={"result": 2})}),
+    )
+
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why is the motor overheating?",
+        model_call=model,
+    )
+
+    assert diagnosis.status == DiagnosisStatus.completed
+    assert seen_messages[-1][-1] == {"role": "user", "content": FINAL_ANSWER_NUDGE}
+
+
+async def test_json_wrapped_in_prose_is_still_parsed(db_session: AsyncSession) -> None:
+    model = ScriptedModel(
+        [_end_turn(f"Here is the diagnosis:\n{DIAGNOSIS_JSON_NO_CITATIONS}\nHope this helps.")]
+    )
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why is the motor overheating?",
+        model_call=model,
+    )
+    assert diagnosis.status == DiagnosisStatus.completed
+    assert diagnosis.possible_causes[0]["cause"] == "Blocked ventilation"
+
+
+async def test_empty_final_answer_fails_with_a_clear_message(db_session: AsyncSession) -> None:
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="test",
+        model_call=ScriptedModel([_end_turn("")]),
+    )
+    assert diagnosis.status == DiagnosisStatus.failed
+    assert "empty final answer" in diagnosis.error_message
 
 
 DIAGNOSIS_JSON_LOW_SEVERITY = _diagnosis_json(recommended_action="Monitor.", severity="low")

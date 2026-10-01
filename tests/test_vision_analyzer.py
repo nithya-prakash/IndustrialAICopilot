@@ -94,3 +94,64 @@ def test_flag_not_duplicated_if_already_present() -> None:
     )
     result = _parse_response(raw)
     assert result.limitations.count(warning) == 1
+
+
+async def test_openai_vision_can_target_a_local_server_without_a_key(monkeypatch) -> None:
+    """VISION_BASE_URL points the OpenAI-compatible path at a local server
+    (e.g. Ollama) — no API key required, and the request goes to that URL."""
+    import json
+    from types import SimpleNamespace
+
+    import openai
+
+    from app.config import get_settings
+    from app.vision import analyzer
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "vision_provider", "openai")
+    monkeypatch.setattr(settings, "vision_api_key", "")
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    monkeypatch.setattr(settings, "vision_base_url", "http://localhost:11434/v1")
+    monkeypatch.setattr(settings, "openai_vision_model", "qwen2.5vl:3b")
+
+    captured: dict = {}
+    reply = json.dumps(
+        {
+            "observations": [{"description": "Rust on the housing", "confidence": 0.7}],
+            "limitations": [],
+        }
+    )
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            captured["model"] = kwargs["model"]
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=reply))], usage=None
+            )
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", FakeClient)
+    result = await analyzer.analyze_image(b"\xff\xd8fake", "image/jpeg")
+
+    assert captured["client_kwargs"]["base_url"] == "http://localhost:11434/v1"
+    assert captured["model"] == "qwen2.5vl:3b"
+    assert result.observations[0]["description"] == "Rust on the housing"
+
+
+async def test_openai_vision_without_key_or_base_url_fails_cleanly(monkeypatch) -> None:
+    import pytest
+
+    from app.config import get_settings
+    from app.vision import analyzer
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "vision_provider", "openai")
+    monkeypatch.setattr(settings, "vision_api_key", "")
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    monkeypatch.setattr(settings, "vision_base_url", "")
+    with pytest.raises(analyzer.VisionError, match="VISION_BASE_URL"):
+        await analyzer.analyze_image(b"\xff\xd8fake", "image/jpeg")

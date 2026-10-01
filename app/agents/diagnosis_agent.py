@@ -34,6 +34,16 @@ from app.tools.executor import ToolContext, ToolExecutionResult, execute_tool
 
 MAX_ITERATIONS = 6
 
+# Sent once if the model is still calling tools when MAX_ITERATIONS runs out
+# (common with smaller open models, which can re-query the same tool round
+# after round) — gives it a chance to answer from what it has instead of the
+# whole diagnosis failing.
+FINAL_ANSWER_NUDGE = (
+    "You have used all available tool calls. Do not call any more tools. "
+    "Using only the evidence already gathered above, respond now with ONLY "
+    "the diagnosis JSON object described in your instructions."
+)
+
 DIAGNOSIS_SYSTEM_PROMPT = """You are an industrial diagnosis assistant helping a \
 maintenance technician troubleshoot equipment.
 
@@ -112,7 +122,18 @@ def _parse_diagnosis_json(text: str) -> dict:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        raise AgentError(f"Model did not return valid diagnosis JSON: {exc}") from exc
+        # Smaller open models often wrap the object in a sentence ("Here is
+        # the diagnosis: {...}"). Accept the outermost {...} span if that
+        # parses; the structural validation below still applies to it.
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        try:
+            if start == -1 or end <= start:
+                raise ValueError
+            data = json.loads(cleaned[start : end + 1])
+        except (ValueError, json.JSONDecodeError):
+            if not cleaned:
+                raise AgentError("Model returned an empty final answer") from exc
+            raise AgentError(f"Model did not return valid diagnosis JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise AgentError("Model diagnosis JSON was not an object")
     return data
@@ -371,7 +392,14 @@ async def run_diagnosis(
                 )
             messages.append({"role": "user", "content": tool_results_content})
         else:
-            final_text = ""  # exhausted MAX_ITERATIONS without an end_turn
+            messages.append({"role": "user", "content": FINAL_ANSWER_NUDGE})
+            turn = await model_call(messages, DIAGNOSIS_SYSTEM_PROMPT)
+            if turn.stop_reason == "tool_use" and turn.tool_calls:
+                raise AgentError(
+                    f"Model did not produce a final answer within {MAX_ITERATIONS} "
+                    "tool-calling rounds"
+                )
+            final_text = turn.text
 
         parsed = _parse_diagnosis_json(final_text)
     except (LLMError, AgentError) as exc:

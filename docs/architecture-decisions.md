@@ -242,6 +242,14 @@ provider abstraction (`VISION_PROVIDER`) is built so adding one later is a
 new branch in `app/vision/analyzer.py`, not a rewrite — documented here as
 a deliberate scope cut, not an oversight.
 
+*Later update:* it turned out not to need a new branch at all. Ollama serves
+vision models (e.g. `qwen2.5vl:3b`) behind an OpenAI-compatible API, so the
+existing `VISION_PROVIDER=openai` path only needed a `VISION_BASE_URL`
+setting (mirroring `LLM_BASE_URL`) to point at it. A ~3 GB model runs on a
+16 GB Apple M4 in ~40 s per photo — slow, but enough to live-verify the
+vision path end to end without API credits. Results are in the README's
+Known limitations.
+
 ## Phase 5
 
 ### Why a narrow/long `SensorReading` schema (one row per metric per timestamp) instead of one wide row per snapshot?

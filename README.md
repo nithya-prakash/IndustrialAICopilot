@@ -150,11 +150,20 @@ that workspace's admin, and can add supervisors and technicians from the
 along with a real `SECRET_KEY`, non-default Postgres/Redis passwords, and a
 `METRICS_TOKEN` — the app refuses to start in production without them.)
 
-No budget for API credits? Set `LLM_PROVIDER=openai`, `LLM_MODEL=llama3.2:3b`,
-`LLM_BASE_URL=http://host.docker.internal:11434/v1` and run a local
-[Ollama](https://ollama.com) server instead — no key, no cost. The diagnosis
-agent's tool-calling loop runs end-to-end against it; see the tool-calling
-caveat under Known limitations for what's different about that path.
+No budget for API credits? Run everything on free local models with
+[Ollama](https://ollama.com) — no key, no cost:
+
+```bash
+ollama pull qwen2.5:7b      # diagnosis agent (tool calling)
+ollama pull qwen2.5vl:3b    # component-photo analysis
+```
+
+then in `.env` set `LLM_PROVIDER=openai`, `LLM_MODEL=qwen2.5:7b`,
+`LLM_BASE_URL=http://host.docker.internal:11434/v1`, and
+`VISION_PROVIDER=openai`, `OPENAI_VISION_MODEL=qwen2.5vl:3b`,
+`VISION_BASE_URL=http://host.docker.internal:11434/v1`. Both paths run end
+to end this way (16 GB RAM is enough); see Known limitations for how the
+results compare.
 
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/api/v1/health
@@ -219,32 +228,31 @@ extensions this project could reasonably grow into, not commitments:
   keyword index — fine at portfolio scale, documented as a scaling
   limitation in the ADR. A newly ingested manual can take up to that long to
   show up in keyword (not dense) results.
-- **Claude/Anthropic path not live-verified**: no Anthropic API credits are
-  configured in this environment, so Claude-specific agent reasoning, VLM
-  accuracy, and diagnosis evaluation have never been exercised end-to-end
-  against Claude here — no accuracy claim is made for that path without it.
-  The diagnosis agent's tool-calling loop *has* been live-verified
-  end-to-end against a free local model instead (Ollama, `llama3.2:3b`, via
-  `LLM_PROVIDER=openai` + `LLM_BASE_URL`) — real HTTP requests, real tool
-  calls confirmed via the `agent_tool_calls_total` Prometheus counter, real
-  evidence retrieved and cited, and unsupported model claims genuinely
-  caught and discarded by the citation validator. See
-  [`docs/usage-guide.md`](docs/usage-guide.md) and Running tests above for
-  the deterministic (non-live) coverage; the live smoke tests and
-  evaluation harness will run for real against Claude the moment
-  `ANTHROPIC_API_KEY` is set.
-- No local VLM option (Qwen-VL/LLaVA) — the provider abstraction supports
-  adding one, but it wasn't built this phase, so vision analysis stays
-  unverified regardless of which LLM provider is used for text.
-- Tool-calling supports both `LLM_PROVIDER=anthropic` and
-  `LLM_PROVIDER=openai` (including any OpenAI-compatible server via
-  `LLM_BASE_URL`, e.g. local Ollama — see Local setup above). A 3B local
-  model selects the right tools but often grounds its final answer in
-  retrieved evidence only loosely (how Claude compares hasn't been measured
-  here — see the first point above); the structural citation validator
-  strips any citation that doesn't match real tool output, so this shows up
-  as fewer supported claims per answer rather than a fabricated citation
-  slipping through.
+- **Claude path not live-verified**: no Anthropic API credits are
+  available here, so the Claude agent and vision paths are covered by the
+  mocked test suite only — no accuracy claim is made for them. The live
+  smoke tests and evaluation harness run against Claude as soon as
+  `ANTHROPIC_API_KEY` has credits.
+- **Open-model path live-verified end to end** (Ollama on a 16 GB Apple M4,
+  via the same OpenAI-compatible code path): a real photo of a worn mill
+  motor analyzed by `qwen2.5vl:3b` (~40 s), then a full diagnosis by
+  `qwen2.5:7b` (~2 min) that called four different tools (image analysis,
+  sensor history, maintenance schedule, manual search), returned three
+  ranked causes each cited to a real manual section, rated severity high,
+  and routed the result to supervisor approval. What it showed honestly:
+  - The 3B vision model gives shallow, sometimes inaccurate observations
+    (it described the motor and a ladder but missed visible rust and dust,
+    and miscounted the ladder steps).
+  - Citations are structurally validated, but free-text sensor findings
+    aren't — the 7B model claimed a reading was "above baseline" when no
+    historical baseline existed. Treat sensor-finding prose as the model's
+    reading, not verified fact.
+  - `llama3.2:3b` picks reasonable tools but often returns an empty or
+    unusable final answer; `qwen2.5:7b` is the smallest model here that
+    produced a complete diagnosis. Smaller models also tend to re-query the
+    same tool round after round, so when the tool budget runs out the agent
+    asks once for a final answer from the evidence already gathered before
+    giving up (`app/agents/diagnosis_agent.py`).
 - Prometheus/Grafana observability covers the FastAPI backend (HTTP,
   LLM/VLM, agent, diagnosis, approval metrics) and the Celery worker (task
   counts/durations via a second scrape target,
