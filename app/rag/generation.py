@@ -213,12 +213,17 @@ async def _call_openai(messages: list[dict], system: str) -> ModelTurn:
     )
 
     choice = response.choices[0].message
-    tool_calls = [
-        ModelToolCall(
-            id=call.id, name=call.function.name, input=json.loads(call.function.arguments)
-        )
-        for call in (choice.tool_calls or [])
-    ]
+    try:
+        tool_calls = [
+            ModelToolCall(
+                id=call.id, name=call.function.name, input=json.loads(call.function.arguments)
+            )
+            for call in (choice.tool_calls or [])
+        ]
+    except (json.JSONDecodeError, TypeError) as exc:
+        # Smaller open models occasionally emit invalid argument JSON. Raised as
+        # LLMError so the agent stores a failed diagnosis instead of a 500.
+        raise LLMError(f"Model returned malformed tool-call arguments: {exc}") from exc
     stop_reason = "tool_use" if tool_calls else "end_turn"
     return ModelTurn(stop_reason=stop_reason, text=choice.content or "", tool_calls=tool_calls)
 

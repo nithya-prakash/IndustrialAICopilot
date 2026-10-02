@@ -13,6 +13,7 @@ from app.schemas.document import DocumentListResponse, DocumentResponse
 from app.schemas.limits import EQUIPMENT_FIELD_MAX_CHARS
 from app.services.document_service import (
     DocumentNotFoundError,
+    DocumentVersionConflictError,
     FileTooLargeError,
     InvalidFileContentError,
     UnsupportedFileTypeError,
@@ -92,6 +93,11 @@ async def upload(
     except DocumentNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        ) from exc
+    except DocumentVersionConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Another version of this document was uploaded at the same time; retry",
         ) from exc
 
     return _to_response(document, version, chunk_count=0)

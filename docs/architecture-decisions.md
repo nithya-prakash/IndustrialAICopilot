@@ -804,7 +804,8 @@ evaluation's own rule against optimizing the benchmark for a better
 number. With only 7 questions this is not strong enough evidence to
 conclude the reranker is net-harmful in general; it's recorded as a real,
 reproducible result on a small internal benchmark, not a general
-performance claim. See `EVALUATION_AUDIT.md` for the full evaluation.
+performance claim. The full ablation is reproducible with
+`python -m evaluation.retrieval_ablation` (results in `data/evaluation/results/`).
 
 ### Why does sign-up create a new workspace instead of letting you pick a role and tenant?
 Found in a later security review: `POST /api/v1/auth/register` accepted

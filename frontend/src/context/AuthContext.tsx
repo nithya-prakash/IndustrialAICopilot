@@ -63,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    // Revoke the token on the server too; local sign-out happens regardless
+    // (e.g. if the token already expired or the API is unreachable).
+    authApi.logout().catch(() => undefined);
     setToken(null);
     localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);

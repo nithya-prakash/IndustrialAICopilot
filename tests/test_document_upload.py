@@ -248,3 +248,24 @@ async def test_delete_succeeds_even_if_vector_cleanup_fails(
         f"/api/v1/documents/{document_id}", headers={"Authorization": f"Bearer {supervisor}"}
     )
     assert gone.status_code == 404
+
+
+async def test_simultaneous_new_version_returns_409_and_leaves_no_file(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two new versions uploaded at once compute the same version number; the
+    unique constraint rejects one. That must be a 409, not a 500."""
+    from sqlalchemy.exc import IntegrityError
+
+    supervisor = await create_user_token(client, "sup_a", "acme", role="supervisor")
+    document_id = (await _upload(client, supervisor)).json()["id"]
+    files_before = set((tmp_path / "manuals").glob("*.pdf"))
+
+    async def lost_the_race(*args, **kwargs):
+        raise IntegrityError("INSERT INTO document_versions", {}, Exception("uq_document_version"))
+
+    monkeypatch.setattr("app.services.document_service._record_version", lost_the_race)
+    response = await _upload(client, supervisor, document_id=document_id)
+
+    assert response.status_code == 409
+    assert set((tmp_path / "manuals").glob("*.pdf")) == files_before

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import UploadFile
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,6 +35,12 @@ class InvalidFileContentError(Exception):
 
 class DocumentNotFoundError(Exception):
     pass
+
+
+class DocumentVersionConflictError(Exception):
+    """Two new versions of the same document were uploaded at the same moment:
+    both computed the same next version number, and the unique constraint on
+    (document_id, version_number) let only one insert win."""
 
 
 async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes:
@@ -149,11 +156,13 @@ async def create_document_version(
             owner_id=owner_id,
             filename=filename,
         )
-    except Exception:
+    except Exception as exc:
         # Nothing references the file if the DB write didn't land — don't
         # leave an orphaned PDF behind in data/manuals/.
         await db.rollback()
         storage_path.unlink(missing_ok=True)
+        if isinstance(exc, IntegrityError) and document_id is not None:
+            raise DocumentVersionConflictError(str(document_id)) from exc
         raise
 
     for old_version_id in superseded_version_ids:

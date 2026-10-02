@@ -13,6 +13,10 @@ export function register(payload: {
   return apiRequest<TokenResponse>("/api/v1/auth/register", { method: "POST", body: payload });
 }
 
+export function logout(): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
+}
+
 export function login(payload: { username: string; password: string }): Promise<TokenResponse> {
   return apiRequest<TokenResponse>("/api/v1/auth/login", { method: "POST", body: payload });
 }

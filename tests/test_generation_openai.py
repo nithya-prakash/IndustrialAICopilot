@@ -247,3 +247,24 @@ async def test_call_model_unsupported_provider_raises_llm_error(
 
     with pytest.raises(LLMError, match="Unsupported LLM_PROVIDER"):
         await call_model([{"role": "user", "content": "test"}], "system prompt")
+
+
+async def test_malformed_tool_arguments_raise_llm_error_not_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid argument JSON from a model must become LLMError, so the agent
+    stores a failed diagnosis instead of the request ending in a 500."""
+    from app.config import get_settings
+    from app.llm.client import LLMError
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "llm_provider", "openai")
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+
+    bad_call = _FakeToolCall("call_1", "calculate", {})
+    bad_call.function.arguments = '{"expression": "6*7"'  # truncated JSON
+    fake_client = _FakeOpenAIClient(_FakeOpenAIResponse(_FakeMessage(None, [bad_call])))
+    monkeypatch.setattr("openai.AsyncOpenAI", lambda **kwargs: fake_client)
+
+    with pytest.raises(LLMError, match="malformed tool-call arguments"):
+        await call_model([{"role": "user", "content": "What is 6*7?"}], "system prompt")
