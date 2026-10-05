@@ -137,6 +137,19 @@ run this end to end.
 - **Infra**: Docker Compose (all ports bound to localhost, password-protected
   Redis), GitHub Actions CI
 
+## Results
+
+Retrieval ablation on the project's 7-question ground-truth set (`python -m evaluation.retrieval_ablation`; raw results in `data/evaluation/results/`):
+
+| Retrieval configuration | MRR |
+|---|---|
+| Dense only | 0.929 |
+| Hybrid (RRF), no rerank | 0.905 |
+| Hybrid + cross-encoder rerank (production config) | 0.886 |
+| BM25 only | 0.878 |
+
+The reranker very slightly *lowers* MRR here and is reported as measured, not tuned away. With only 7 questions the differences are small and this is a reproducible internal result, not a general performance claim. See Known limitations below for what is and is not evaluated.
+
 ## Local setup
 
 ```bash
