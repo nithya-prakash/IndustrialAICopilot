@@ -168,6 +168,30 @@ results compare.
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/api/v1/health
 
+## MCP server
+
+The seven diagnostic tools are also exposed as a standalone [MCP](https://modelcontextprotocol.io) server (`app/mcp_server/`), so any MCP client can call them. It reuses the same tool schemas and executor as the in-app agent, so tenant scoping and citation strings behave identically. It is scoped to one tenant via `MCP_TENANT_ID`; clients cannot pick a tenant.
+
+Register it in your MCP client's server configuration (the `mcpServers` format most clients use), with the stack's Postgres running:
+
+```json
+{
+  "mcpServers": {
+    "industrial-copilot": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server.server"],
+      "cwd": "/absolute/path/to/industrial-copilot",
+      "env": {
+        "MCP_TENANT_ID": "acme",
+        "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost:5432/copilot"
+      }
+    }
+  }
+}
+```
+
+Failed tool calls come back as MCP errors rather than crashing the server. Covered by `tests/test_mcp_server.py`.
+
 ## Running tests
 
 ```bash
