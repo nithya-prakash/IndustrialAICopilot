@@ -134,7 +134,10 @@ def _parse_diagnosis_json(text: str) -> dict:
         except (ValueError, json.JSONDecodeError):
             if not cleaned:
                 raise AgentError("Model returned an empty final answer") from exc
-            raise AgentError(f"Model did not return valid diagnosis JSON: {exc}") from exc
+            raise AgentError(
+                f"Model did not return valid diagnosis JSON: {exc}; "
+                f"model output began: {cleaned[:120]!r}"
+            ) from exc
     if not isinstance(data, dict):
         raise AgentError("Model diagnosis JSON was not an object")
     return data

@@ -257,8 +257,14 @@ Human Approval, Frontend, Observability, Evaluation, CI/CD, Final Polish.
 - **Locust** (`loadtest/locustfile.py`, AI endpoints skipped, 5 users, 45 s, local Docker, 95 requests,
   0 failures): `/health` avg 11 ms, `GET /diagnoses` avg 24 ms (p99 160 ms), login avg 1.6 s (password
   hashing). Light load on one laptop; AI endpoints are rate limited and model-bound, so not load-tested.
-- **Provider switch**: `LLM_PROVIDER=groq|gemini` uses their OpenAI-compatible endpoints (set `LLM_API_KEY`);
-  unit-tested for URL selection only, no live call made.
+- **Provider switch** (`LLM_PROVIDER=groq|gemini`, key in `LLM_API_KEY`): groq and gemini use their
+  OpenAI-compatible endpoints. **Live check on Groq (`openai/gpt-oss-120b`, free tier)**, same question and manual as
+  the local run: single-agent `/query` completed in 7.0 s (confidence 0.80, 5 citations, approval required) and the
+  supervisor graph in 8.5 s (confidence 0.72, real manual citations, approval required), versus about 155 s on the
+  local 7B model. The run exposed one model quirk: gpt-oss sometimes tries to return its final JSON as a call to a
+  non-existent tool and Groq rejects it (`tool_use_failed`); the client now retries once without tools, asking for
+  plain JSON (unit-tested). One question on one model, not a benchmark. Gemini is wired the same way but has not
+  been called live.
 - **Injection screens, compared** (`python -m evaluation.injection_eval --llm-guard`; 20 hand-written synthetic attacks
   in `data/evaluation/injection_attacks.json`; benign = 7 real manual chunks + 15 synthetic tricky-benign sentences):
 

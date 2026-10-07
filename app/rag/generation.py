@@ -165,6 +165,12 @@ def _anthropic_messages_to_openai(messages: list[dict], system: str) -> list[dic
     return openai_messages
 
 
+_FINAL_ANSWER_NUDGE = (
+    "Respond now with ONLY the final JSON diagnosis object described in the system prompt, "
+    "as plain text. Do not call any tool."
+)
+
+
 async def _call_openai(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
     settings = get_settings()
     if not settings.resolved_llm_api_key and not settings.resolved_llm_base_url:
@@ -181,16 +187,29 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
     )
     openai_messages = _anthropic_messages_to_openai(messages, system)
     start = time.perf_counter()
-    try:
-        response = await call_with_retry(
+    async def create(msgs: list[dict], with_tools: bool):
+        return await call_with_retry(
             "llm_agent",
             is_transient_llm_error,
             client.chat.completions.create,
             model=settings.llm_model,
             max_tokens=2048,
-            messages=openai_messages,
-            **({"tools": _openai_tool_definitions()} if use_tools else {}),
+            messages=msgs,
+            **({"tools": _openai_tool_definitions()} if with_tools else {}),
         )
+
+    try:
+        try:
+            response = await create(openai_messages, use_tools)
+        except openai.BadRequestError as exc:
+            # Some hosted models (observed: gpt-oss on Groq) try to deliver the final JSON
+            # answer as a call to a tool that does not exist, and the provider rejects the
+            # request with `tool_use_failed`. Retry once without tools, asking for plain JSON.
+            if not (use_tools and "tool_use_failed" in str(exc)):
+                raise
+            response = await create(
+                [*openai_messages, {"role": "user", "content": _FINAL_ANSWER_NUDGE}], False
+            )
     except Exception as exc:
         record_llm_call(
             provider="openai",

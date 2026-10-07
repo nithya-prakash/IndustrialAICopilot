@@ -281,3 +281,46 @@ def test_groq_and_gemini_use_preset_base_urls_unless_overridden(monkeypatch):
     assert "generativelanguage.googleapis.com" in settings.resolved_llm_base_url
     monkeypatch.setattr(settings, "llm_base_url", "http://localhost:11434/v1")
     assert settings.resolved_llm_base_url == "http://localhost:11434/v1"
+
+
+async def test_tool_use_failed_is_retried_once_without_tools(monkeypatch):
+    import httpx
+    import openai
+
+    from app.config import get_settings
+    from app.rag import generation
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "llm_api_key", "test-key")
+    calls = []
+
+    class Message:
+        content = '{"summary": "ok"}'
+        tool_calls = None
+
+    class Response:
+        choices = [type("C", (), {"message": Message})()]
+        usage = None
+
+    async def create(**kwargs):
+        calls.append(kwargs)
+        if "tools" in kwargs:
+            request = httpx.Request("POST", "http://x")
+            raise openai.BadRequestError(
+                "tool_use_failed: attempted to call tool 'JSON'",
+                response=httpx.Response(400, request=request),
+                body={},
+            )
+        return Response()
+
+    class FakeClient:
+        def __init__(self, **_):
+            completions = type("Comp", (), {"create": staticmethod(create)})()
+            self.chat = type("Chat", (), {"completions": completions})()
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", FakeClient)
+    turn = await generation.call_model([{"role": "user", "content": "q"}], "sys")
+    assert turn.text == '{"summary": "ok"}' and turn.stop_reason == "end_turn"
+    assert "tools" in calls[0] and "tools" not in calls[1]
+    assert "Do not call any tool" in calls[1]["messages"][-1]["content"]
