@@ -8,6 +8,7 @@ from app.api.routes.copilot import to_diagnosis_response
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.agents.supervised import resume_if_paused
 from app.schemas.approval import ApprovalDecisionRequest
 from app.schemas.copilot import DiagnosisResponse
 from app.services.approval_service import (
@@ -111,6 +112,10 @@ async def approve(
     ) as exc:
         raise _handle_decision_errors(exc) from exc
 
+    await resume_if_paused(
+        db, tenant_id=user.tenant_id, diagnosis_id=diagnosis_id,
+        decision="approved", reviewer=str(user.id),
+    )
     diagnosis = await get_diagnosis(db, diagnosis_id=diagnosis_id, tenant_id=user.tenant_id)
     return to_diagnosis_response(diagnosis, approval)
 
@@ -138,5 +143,9 @@ async def reject(
     ) as exc:
         raise _handle_decision_errors(exc) from exc
 
+    await resume_if_paused(
+        db, tenant_id=user.tenant_id, diagnosis_id=diagnosis_id,
+        decision="rejected", reviewer=str(user.id),
+    )
     diagnosis = await get_diagnosis(db, diagnosis_id=diagnosis_id, tenant_id=user.tenant_id)
     return to_diagnosis_response(diagnosis, approval)

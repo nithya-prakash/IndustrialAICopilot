@@ -236,6 +236,33 @@ verified — lives in
 Document Intelligence, RAG, Vision, Sensor Intelligence, Diagnosis Agent,
 Human Approval, Frontend, Observability, Evaluation, CI/CD, Final Polish.
 
+## Supervisor graph, RAGAS and load test (2026-10-07)
+
+![Demo: a 20% confidence diagnosis held for review (invented citations discarded and disclosed), supervisor rejects it with a comment, then a 69% supervisor-graph diagnosis with real manual citations](docs/images/supervisor-demo.gif)
+
+*Recorded headlessly against the local Docker stack from diagnoses produced by the live `qwen2.5:7b` runs above; the page changes (rejecting the 20% one) are real UI actions.*
+
+- **LangGraph supervisor** (`POST /api/v1/copilot/query/supervised`): a supervisor routes between
+  documents / sensors / vision specialists, each limited to its own tools; synthesis reuses the
+  single agent's citation validation and confidence scoring. When a diagnosis needs approval the
+  graph pauses with `interrupt()` and the supervisor's approve/reject call resumes it. Checkpoints
+  are in memory, so a server restart drops paused threads (the database approval record is unaffected).
+  Live check on local `qwen2.5:7b`: completed in ~155 s, 5 evidence items, real manual citations,
+  confidence 0.69, approval required. A first run exposed two bugs, both fixed: routing/synthesis were
+  offered tools and returned tool calls instead of text, and the supervisor could skip every specialist.
+- **RAGAS** (`python -m evaluation.ragas_eval`, own venv via `requirements-eval.txt`), 7 questions over
+  the sample manual, judge = local `qwen2.5:7b`: faithfulness **1.00**, context precision (no reference)
+  **0.91** (7/7 scored). Caveat: tiny set, one manual, and a 7B judge grading a 7B generator; read it as a
+  sanity check, not a benchmark. Langfuse export is implemented but untested (no Langfuse instance).
+- **Locust** (`loadtest/locustfile.py`, AI endpoints skipped, 5 users, 45 s, local Docker, 95 requests,
+  0 failures): `/health` avg 11 ms, `GET /diagnoses` avg 24 ms (p99 160 ms), login avg 1.6 s (password
+  hashing). Light load on one laptop; AI endpoints are rate limited and model-bound, so not load-tested.
+- **Provider switch**: `LLM_PROVIDER=groq|gemini` uses their OpenAI-compatible endpoints (set `LLM_API_KEY`);
+  unit-tested for URL selection only, no live call made.
+- **Injection screen** (`app/guardrails.py`): regex tripwire on tool/retrieved text; flagged content is
+  disclosed in the diagnosis `limitations`. Tested on 8 attack and 5 benign strings; paraphrased or
+  non-English attacks will pass. This is not the Guardrails AI library.
+
 ## Possible next steps
 
 Everything in the original 12-phase build plan is complete. Genuine

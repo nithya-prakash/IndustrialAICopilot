@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.confidence import EvidenceSignals, calculate_confidence, normalize_severity
 from app.agents.confidence import requires_human_approval as compute_requires_approval
 from app.config import get_settings
+from app.guardrails import scan_obj
 from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
@@ -330,6 +331,7 @@ async def run_diagnosis(
     tool_error_count = 0
     has_document_evidence = has_sensor_evidence = has_image_evidence = False
     sensor_anomaly_detected = False
+    injection_flags: set[str] = set()
     final_text = ""
 
     try:
@@ -368,6 +370,7 @@ async def run_diagnosis(
                 )
                 if result.error:
                     tool_error_count += 1
+                injection_flags.update(scan_obj([result.output, result.evidence]))
                 all_citations.update(result.citations)
                 evidence.extend(result.evidence)
                 for item in result.evidence:
@@ -426,6 +429,12 @@ async def run_diagnosis(
         limitations.append(
             f"The model referenced {dropped_citation_count} {noun} that did not match any "
             f"evidence actually gathered; they were discarded rather than shown."
+        )
+
+    if injection_flags:
+        limitations.append(
+            "Retrieved content contained instruction-like text (" + ", ".join(sorted(injection_flags))
+            + "); it was treated as data, but the source documents should be reviewed."
         )
 
     signals = EvidenceSignals(

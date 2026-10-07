@@ -268,3 +268,16 @@ async def test_malformed_tool_arguments_raise_llm_error_not_crash(
 
     with pytest.raises(LLMError, match="malformed tool-call arguments"):
         await call_model([{"role": "user", "content": "What is 6*7?"}], "system prompt")
+
+
+def test_groq_and_gemini_use_preset_base_urls_unless_overridden(monkeypatch):
+    from app.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "llm_base_url", "")
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    assert settings.resolved_llm_base_url == "https://api.groq.com/openai/v1"
+    monkeypatch.setattr(settings, "llm_provider", "gemini")
+    assert "generativelanguage.googleapis.com" in settings.resolved_llm_base_url
+    monkeypatch.setattr(settings, "llm_base_url", "http://localhost:11434/v1")
+    assert settings.resolved_llm_base_url == "http://localhost:11434/v1"

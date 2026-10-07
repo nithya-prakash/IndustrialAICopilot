@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.diagnosis_agent import run_diagnosis
+from app.agents.supervised import run_supervised_diagnosis
 from app.config import get_settings
 from app.core.deps import get_current_user
 from app.core.rate_limit import limiter
@@ -64,6 +65,29 @@ async def query(
     db: AsyncSession = Depends(get_db),
 ) -> DiagnosisResponse:
     diagnosis = await run_diagnosis(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        conversation_id=payload.conversation_id,
+        question=payload.question,
+        equipment_id=payload.equipment_id,
+        equipment_type=payload.equipment_type,
+        image_analysis_id=payload.image_analysis_id,
+        sensor_snapshot=payload.sensor_readings,
+    )
+    return to_diagnosis_response(diagnosis)
+
+
+@router.post("/query/supervised", response_model=DiagnosisResponse)
+@limiter.limit(_settings.rate_limit_ai)
+async def query_supervised(
+    request: Request,
+    payload: CopilotQueryRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DiagnosisResponse:
+    """Same contract as /query, orchestrated by the LangGraph supervisor."""
+    diagnosis = await run_supervised_diagnosis(
         db,
         tenant_id=user.tenant_id,
         user_id=user.id,

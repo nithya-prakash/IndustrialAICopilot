@@ -1,0 +1,7 @@
+# Separate from requirements.txt: ragas needs langchain-core<1, which conflicts
+# with langgraph (langchain-core>=1.4). Install into its own venv.
+ragas==0.4.3
+langchain-openai<1
+langchain-community<0.4
+langchain-core<1
+langfuse>=4

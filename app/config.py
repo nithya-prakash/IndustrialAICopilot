@@ -34,6 +34,12 @@ class InsecureConfigError(RuntimeError):
     pass
 
 
+OPENAI_COMPATIBLE_BASE_URLS = {
+    "groq": "https://api.groq.com/openai/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -72,7 +78,7 @@ class Settings(BaseSettings):
     # Configurable chat-completion provider used by RAG generation and (later)
     # the diagnosis agent. "openai" also covers Ollama/any OpenAI-compatible
     # server via LLM_BASE_URL (e.g. http://localhost:11434/v1).
-    llm_provider: str = "anthropic"  # "anthropic" | "openai"
+    llm_provider: str = "anthropic"  # "anthropic" | "openai" | "groq" | "gemini"
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_api_key: str = ""  # falls back to anthropic_api_key/openai_api_key if empty
     llm_base_url: str = ""
@@ -213,6 +219,12 @@ class Settings(BaseSettings):
         if self.llm_api_key:
             return self.llm_api_key
         return self.anthropic_api_key if self.llm_provider == "anthropic" else self.openai_api_key
+
+    @property
+    def resolved_llm_base_url(self) -> str:
+        """Explicit LLM_BASE_URL wins; groq/gemini default to their
+        OpenAI-compatible endpoints (set LLM_API_KEY to that provider's key)."""
+        return self.llm_base_url or OPENAI_COMPATIBLE_BASE_URLS.get(self.llm_provider, "")
 
 
 @lru_cache

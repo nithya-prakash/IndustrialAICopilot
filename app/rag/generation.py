@@ -26,7 +26,7 @@ import json
 import time
 from dataclasses import dataclass, field
 
-from app.config import get_settings
+from app.config import OPENAI_COMPATIBLE_BASE_URLS, get_settings
 from app.core.retry import call_with_retry, is_transient_llm_error
 from app.llm.client import LLMError
 from app.observability.metrics import record_llm_call
@@ -47,7 +47,7 @@ class ModelTurn:
     tool_calls: list[ModelToolCall] = field(default_factory=list)
 
 
-async def _call_anthropic(messages: list[dict], system: str) -> ModelTurn:
+async def _call_anthropic(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
     settings = get_settings()
     if not settings.resolved_llm_api_key:
         raise LLMError("No Anthropic API key configured (set ANTHROPIC_API_KEY or LLM_API_KEY)")
@@ -65,7 +65,7 @@ async def _call_anthropic(messages: list[dict], system: str) -> ModelTurn:
             max_tokens=2048,
             system=system,
             messages=messages,
-            tools=TOOL_DEFINITIONS,
+            **({"tools": TOOL_DEFINITIONS} if use_tools else {}),
         )
     except Exception as exc:
         record_llm_call(
@@ -165,9 +165,9 @@ def _anthropic_messages_to_openai(messages: list[dict], system: str) -> list[dic
     return openai_messages
 
 
-async def _call_openai(messages: list[dict], system: str) -> ModelTurn:
+async def _call_openai(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
     settings = get_settings()
-    if not settings.resolved_llm_api_key and not settings.llm_base_url:
+    if not settings.resolved_llm_api_key and not settings.resolved_llm_base_url:
         raise LLMError(
             "No OpenAI-compatible API key configured (set OPENAI_API_KEY or LLM_API_KEY), "
             "and no LLM_BASE_URL set for a local server"
@@ -177,7 +177,7 @@ async def _call_openai(messages: list[dict], system: str) -> ModelTurn:
 
     client = openai.AsyncOpenAI(
         api_key=settings.resolved_llm_api_key or "not-needed-for-local-server",
-        base_url=settings.llm_base_url or None,
+        base_url=settings.resolved_llm_base_url or None,
     )
     openai_messages = _anthropic_messages_to_openai(messages, system)
     start = time.perf_counter()
@@ -189,7 +189,7 @@ async def _call_openai(messages: list[dict], system: str) -> ModelTurn:
             model=settings.llm_model,
             max_tokens=2048,
             messages=openai_messages,
-            tools=_openai_tool_definitions(),
+            **({"tools": _openai_tool_definitions()} if use_tools else {}),
         )
     except Exception as exc:
         record_llm_call(
@@ -228,10 +228,10 @@ async def _call_openai(messages: list[dict], system: str) -> ModelTurn:
     return ModelTurn(stop_reason=stop_reason, text=choice.content or "", tool_calls=tool_calls)
 
 
-async def call_model(messages: list[dict], system: str) -> ModelTurn:
+async def call_model(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
     settings = get_settings()
     if settings.llm_provider == "anthropic":
-        return await _call_anthropic(messages, system)
-    if settings.llm_provider == "openai":
-        return await _call_openai(messages, system)
+        return await _call_anthropic(messages, system, use_tools)
+    if settings.llm_provider in ("openai", *OPENAI_COMPATIBLE_BASE_URLS):
+        return await _call_openai(messages, system, use_tools)
     raise LLMError(f"Unsupported LLM_PROVIDER for agent tool-calling: {settings.llm_provider!r}")
