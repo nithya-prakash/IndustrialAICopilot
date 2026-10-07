@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"  # "anthropic" | "openai" | "groq" | "gemini"
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_api_key: str = ""  # falls back to anthropic_api_key/openai_api_key if empty
+    groq_api_key: str = ""
+    gemini_api_key: str = ""
     llm_base_url: str = ""
     # "regex" (default) or "llm_guard" (adds llm-guard's PromptInjection classifier;
     # needs the optional package)
@@ -219,6 +221,11 @@ class Settings(BaseSettings):
 
     @property
     def resolved_llm_api_key(self) -> str:
+        # A provider-specific key (GROQ_API_KEY / GEMINI_API_KEY) wins for that provider, so
+        # several providers' keys can sit in .env and LLM_PROVIDER alone picks between them.
+        specific = {"groq": self.groq_api_key, "gemini": self.gemini_api_key}.get(self.llm_provider)
+        if specific:
+            return specific
         if self.llm_api_key:
             return self.llm_api_key
         return self.anthropic_api_key if self.llm_provider == "anthropic" else self.openai_api_key

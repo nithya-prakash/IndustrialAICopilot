@@ -324,3 +324,18 @@ async def test_tool_use_failed_is_retried_once_without_tools(monkeypatch):
     assert turn.text == '{"summary": "ok"}' and turn.stop_reason == "end_turn"
     assert "tools" in calls[0] and "tools" not in calls[1]
     assert "Do not call any tool" in calls[1]["messages"][-1]["content"]
+
+
+def test_provider_specific_key_wins_over_llm_api_key(monkeypatch):
+    from app.config import get_settings
+
+    s = get_settings()
+    monkeypatch.setattr(s, "llm_api_key", "generic")
+    monkeypatch.setattr(s, "groq_api_key", "groq-key")
+    monkeypatch.setattr(s, "gemini_api_key", "gemini-key")
+    monkeypatch.setattr(s, "llm_provider", "gemini")
+    assert s.resolved_llm_api_key == "gemini-key"
+    monkeypatch.setattr(s, "llm_provider", "groq")
+    assert s.resolved_llm_api_key == "groq-key"
+    monkeypatch.setattr(s, "llm_provider", "openai")
+    assert s.resolved_llm_api_key == "generic"
