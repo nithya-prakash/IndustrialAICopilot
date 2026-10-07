@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.supervised import resume_if_paused
 from app.api.routes.copilot import to_diagnosis_response
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.agents.supervised import resume_if_paused
 from app.schemas.approval import ApprovalDecisionRequest
 from app.schemas.copilot import DiagnosisResponse
 from app.services.approval_service import (

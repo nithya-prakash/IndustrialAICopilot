@@ -12,8 +12,10 @@ calls `interrupt()` when the diagnosis needs human review; the graph pauses
 model_call / run_tool are injected, as in diagnosis_agent, so the graph is
 testable without a real LLM or database.
 """
+
 import json
-from typing import Annotated, Any, Awaitable, Callable, TypedDict
+from collections.abc import Awaitable, Callable
+from typing import Annotated, Any, TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -77,6 +79,7 @@ def build_supervisor_graph(
 ):
     # Routing and synthesis must answer in text; only specialists get tools.
     plain_call = plain_call or model_call
+
     async def supervisor(state: DiagnosisState) -> dict:
         visited = state.get("visited", [])
         if len(visited) >= MAX_SUPERVISOR_STEPS:
@@ -179,7 +182,13 @@ def build_supervisor_graph(
         try:
             parsed = _parse_diagnosis_json(turn.text)
         except AgentError as exc:
-            return {"diagnosis": {"status": "failed", "error": str(exc), "requires_human_approval": True}}
+            return {
+                "diagnosis": {
+                    "status": "failed",
+                    "error": str(exc),
+                    "requires_human_approval": True,
+                }
+            }
         causes, cited, dropped = _validate_causes(
             parsed.get("possible_causes"), set(state.get("citations", []))
         )
@@ -235,7 +244,9 @@ def build_supervisor_graph(
     g.add_node("approval_gate", approval_gate)
     g.add_edge(START, "supervisor")
     g.add_conditional_edges(
-        "supervisor", lambda s: s["next"], {**{n: n for n in SPECIALIST_TOOLS}, "synthesize": "synthesize"}
+        "supervisor",
+        lambda s: s["next"],
+        {**{n: n for n in SPECIALIST_TOOLS}, "synthesize": "synthesize"},
     )
     g.add_edge("synthesize", "approval_gate")
     g.add_edge("approval_gate", END)

@@ -7,6 +7,7 @@ RATE_LIMIT_AI), so 429s are counted as expected throttling, not failures —
 the interesting numbers are latency of the non-AI paths and how the limiter
 behaves under pressure.
 """
+
 import os
 import random
 
@@ -45,7 +46,9 @@ class Technician(HttpUser):
         if os.environ.get("LOAD_SKIP_AI"):
             return
         with self.client.post(
-            "/api/v1/copilot/query/supervised" if random.random() < 0.5 else "/api/v1/copilot/query",
+            "/api/v1/copilot/query/supervised"
+            if random.random() < 0.5
+            else "/api/v1/copilot/query",
             json={"question": random.choice(QUESTIONS), "equipment_id": "MOTOR-001"},
             catch_response=True,
         ) as res:

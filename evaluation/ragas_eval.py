@@ -2,7 +2,7 @@
 
 Two stages so each runs in the environment it needs:
 
-    python -m evaluation.ragas_eval collect   # app venv + Postgres/Qdrant: question -> contexts + answer
+    python -m evaluation.ragas_eval collect   # app venv + Postgres/Qdrant: contexts + answer
     python -m evaluation.ragas_eval score     # eval venv (requirements-eval.txt): RAGAS metrics
 
 The judge is any OpenAI-compatible endpoint (default: local Ollama,
@@ -12,6 +12,7 @@ expected sources, not reference answers. A small local judge is a noisy grader;
 treat scores as relative, not absolute. Langfuse export only runs when
 LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY are set.
 """
+
 import asyncio
 import json
 import os
@@ -43,7 +44,9 @@ async def collect() -> list[dict]:
             chunks = await hybrid_search(db, item["question"], tenant_id=EVAL_TENANT, top_k=5)
             contexts = [c.content for c in chunks]
             prompt = "Context:\n" + "\n---\n".join(contexts) + f"\n\nQuestion: {item['question']}"
-            turn = await call_model([{"role": "user", "content": prompt}], ANSWER_SYSTEM, use_tools=False)
+            turn = await call_model(
+                [{"role": "user", "content": prompt}], ANSWER_SYSTEM, use_tools=False
+            )
             records.append(
                 {"question": item["question"], "contexts": contexts, "answer": turn.text.strip()}
             )
@@ -55,9 +58,9 @@ async def collect() -> list[dict]:
 def score(records: list[dict]) -> dict:
     from langchain_openai import ChatOpenAI
     from ragas import EvaluationDataset, SingleTurnSample, evaluate
-    from ragas.run_config import RunConfig
     from ragas.llms import LangchainLLMWrapper
     from ragas.metrics import Faithfulness, LLMContextPrecisionWithoutReference
+    from ragas.run_config import RunConfig
 
     llm = LangchainLLMWrapper(
         ChatOpenAI(
@@ -82,7 +85,9 @@ def score(records: list[dict]) -> dict:
         raise_exceptions=False,
     )
     df = result.to_pandas()
-    metric_cols = [c for c in df.columns if c in ("faithfulness", "llm_context_precision_without_reference")]
+    metric_cols = [
+        c for c in df.columns if c in ("faithfulness", "llm_context_precision_without_reference")
+    ]
     summary = {c: round(float(df[c].mean()), 3) for c in metric_cols}  # NaN rows are skipped
     scored = {c: int(df[c].notna().sum()) for c in metric_cols}
     report = {
@@ -92,20 +97,43 @@ def score(records: list[dict]) -> dict:
         "num_records": len(records),
         "per_question": json.loads(df.to_json(orient="records")),
     }
-    _export_to_langfuse(report)
+    report["langfuse_traces"] = _export_to_langfuse(report, records)
     return report
 
 
-def _export_to_langfuse(report: dict) -> None:
+def _export_to_langfuse(report: dict, records: list[dict]) -> int:
+    """One Langfuse trace per question (input, retrieved contexts, answer) with its RAGAS
+    scores attached, plus run-level mean scores on a summary trace. Only runs when
+    LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY (and LANGFUSE_HOST) are set.
+    Returns the number of traces written."""
     if not (os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY")):
-        return
+        return 0
     from langfuse import Langfuse
 
     client = Langfuse()
-    trace_id = client.create_trace_id()
-    for name, value in report["summary"].items():
-        client.create_score(trace_id=trace_id, name=f"ragas_{name}", value=value)
+    metrics = [m for m in report["summary"]]
+    for rec, row in zip(records, report["per_question"], strict=True):
+        with client.start_as_current_observation(
+            name="rag-answer",
+            as_type="span",
+            input=rec["question"],
+            output=rec["answer"],
+            metadata={"contexts": rec["contexts"], "judge": report["judge"]},
+        ):
+            trace_id = client.get_current_trace_id()
+        for m in metrics:
+            value = row.get(m)
+            if value is not None and value == value:  # skip NaN
+                client.create_score(trace_id=trace_id, name=f"ragas_{m}", value=float(value))
+    with client.start_as_current_observation(
+        name="ragas-run-summary", as_type="span", output=report["summary"]
+    ):
+        trace_id = client.get_current_trace_id()
+    for m, v in report["summary"].items():
+        if v == v:
+            client.create_score(trace_id=trace_id, name=f"ragas_mean_{m}", value=float(v))
     client.flush()
+    return len(records) + 1
 
 
 def main() -> None:
@@ -113,6 +141,10 @@ def main() -> None:
     if stage == "collect":
         records = asyncio.run(collect())
         print(f"Collected {len(records)} records -> {RECORDS_PATH}")
+    elif stage == "export-langfuse":  # re-export an existing report without re-scoring
+        report = json.loads(Path(sys.argv[2]).read_text())
+        n = _export_to_langfuse(report, json.loads(RECORDS_PATH.read_text()))
+        print(f"Langfuse: {n} traces written" if n else "Langfuse keys not set; nothing exported")
     elif stage == "score":
         if not RECORDS_PATH.exists():
             sys.exit(f"{RECORDS_PATH} missing — run the collect stage first.")
@@ -122,7 +154,9 @@ def main() -> None:
         print(json.dumps({k: report[k] for k in ("judge", "summary", "scored_samples")}, indent=2))
         print(f"Report: {out}")
     else:
-        sys.exit("usage: python -m evaluation.ragas_eval [collect|score]")
+        sys.exit(
+            "usage: python -m evaluation.ragas_eval [collect|score|export-langfuse REPORT.json]"
+        )
 
 
 if __name__ == "__main__":

@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_api_key: str = ""  # falls back to anthropic_api_key/openai_api_key if empty
     llm_base_url: str = ""
+    # "regex" (default) or "llm_guard" (adds llm-guard's PromptInjection classifier;
+    # needs the optional package)
+    injection_scanner: str = "regex"
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 384

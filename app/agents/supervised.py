@@ -6,6 +6,7 @@ supervisor's approve/reject call resumes (and so completes) that thread.
 Checkpoints are in-memory (MemorySaver): a restart drops paused threads, but
 the Diagnosis row and its DB approval flow are unaffected.
 """
+
 import uuid
 from functools import partial
 
@@ -56,17 +57,24 @@ async def run_supervised_diagnosis(
 ) -> Diagnosis:
     settings = get_settings()
     conversation = await _get_or_create_conversation(
-        db, tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id,
-        equipment_id=equipment_id, question=question,
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        equipment_id=equipment_id,
+        question=question,
     )
     thread_id = str(uuid.uuid4())
     graph = _graph(db, tenant_id, model_call)
-    state = await graph.ainvoke(
+    await graph.ainvoke(
         {
             "question": question,
             "request_context": _build_initial_message(
-                question=question, equipment_id=equipment_id, equipment_type=equipment_type,
-                image_analysis_id=image_analysis_id, sensor_snapshot=sensor_snapshot,
+                question=question,
+                equipment_id=equipment_id,
+                equipment_type=equipment_type,
+                image_analysis_id=image_analysis_id,
+                sensor_snapshot=sensor_snapshot,
             ),
             "image_analysis_id": str(image_analysis_id) if image_analysis_id else None,
             "visited": [],
@@ -77,26 +85,44 @@ async def run_supervised_diagnosis(
     result = final.get("diagnosis") or {}
     if result.get("status") != "completed":
         return await _persist_failed_diagnosis(
-            db, conversation=conversation, tenant_id=tenant_id, user_id=user_id,
-            equipment_id=equipment_id, equipment_type=equipment_type, question=question,
+            db,
+            conversation=conversation,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            equipment_id=equipment_id,
+            equipment_type=equipment_type,
+            question=question,
             error_message=result.get("error", "Supervisor produced no diagnosis"),
-            evidence=final.get("evidence"), tool_call_log=final.get("tool_calls"),
+            evidence=final.get("evidence"),
+            tool_call_log=final.get("tool_calls"),
         )
 
     diagnosis = Diagnosis(
-        tenant_id=tenant_id, conversation_id=conversation.id, user_id=user_id,
-        equipment_id=equipment_id, equipment_type=equipment_type, question=question,
-        status=DiagnosisStatus.completed, summary=result["summary"] or "(no summary provided)",
+        tenant_id=tenant_id,
+        conversation_id=conversation.id,
+        user_id=user_id,
+        equipment_id=equipment_id,
+        equipment_type=equipment_type,
+        question=question,
+        status=DiagnosisStatus.completed,
+        summary=result["summary"] or "(no summary provided)",
         possible_causes=result["possible_causes"],
         recommended_action=result["recommended_action"],
-        confidence=result["confidence"], severity=DiagnosisSeverity(result["severity"]),
+        confidence=result["confidence"],
+        severity=DiagnosisSeverity(result["severity"]),
         requires_human_approval=result["requires_human_approval"],
-        evidence=final.get("evidence", []), tool_calls=final.get("tool_calls", []),
+        evidence=final.get("evidence", []),
+        tool_calls=final.get("tool_calls", []),
         limitations=(
-            [f"{result['dropped_citations']} citation(s) did not match gathered evidence "
-             "and were discarded."] if result["dropped_citations"] else []
+            [
+                f"{result['dropped_citations']} citation(s) did not match gathered evidence "
+                "and were discarded."
+            ]
+            if result["dropped_citations"]
+            else []
         ),
-        llm_provider=settings.llm_provider, llm_model=settings.llm_model,
+        llm_provider=settings.llm_provider,
+        llm_model=settings.llm_model,
     )
     db.add(diagnosis)
     await db.flush()
@@ -104,13 +130,26 @@ async def run_supervised_diagnosis(
     if paused:
         _paused_threads[diagnosis.id] = thread_id
     db.add(Message(conversation_id=conversation.id, role=MessageRole.user, content=question))
-    db.add(Message(conversation_id=conversation.id, role=MessageRole.assistant,
-                   content=diagnosis.summary, diagnosis_id=diagnosis.id))
+    db.add(
+        Message(
+            conversation_id=conversation.id,
+            role=MessageRole.assistant,
+            content=diagnosis.summary,
+            diagnosis_id=diagnosis.id,
+        )
+    )
     await log_event(
-        db, tenant_id=tenant_id, actor_user_id=user_id, action="diagnosis.created",
-        resource_type="diagnosis", resource_id=diagnosis.id,
-        detail={"orchestrator": "langgraph_supervisor", "paused_for_approval": paused,
-                "specialists": final.get("visited", [])},
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user_id,
+        action="diagnosis.created",
+        resource_type="diagnosis",
+        resource_id=diagnosis.id,
+        detail={
+            "orchestrator": "langgraph_supervisor",
+            "paused_for_approval": paused,
+            "specialists": final.get("visited", []),
+        },
     )
     await db.commit()
     await db.refresh(diagnosis)

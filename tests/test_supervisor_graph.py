@@ -35,7 +35,9 @@ class FakeModel:
         if "specialist" in system:
             self.specialist_calls += 1
             if self.specialist_calls % 2 == 1:
-                call = ModelToolCall(id="t1", name="search_technical_documents", input={"query": "q"})
+                call = ModelToolCall(
+                    id="t1", name="search_technical_documents", input={"query": "q"}
+                )
                 return ModelTurn(text="", stop_reason="tool_use", tool_calls=[call])
             return ModelTurn(text="done", stop_reason="end_turn")
         return ModelTurn(text=_final(self.severity), stop_reason="end_turn")
@@ -43,7 +45,9 @@ class FakeModel:
 
 async def _run_tool(name, tool_input):
     return ToolExecutionResult(
-        output={"ok": True}, citations=[CITE], evidence=[{"type": "document_chunk", "citation": CITE}]
+        output={"ok": True},
+        citations=[CITE],
+        evidence=[{"type": "document_chunk", "citation": CITE}],
     )
 
 

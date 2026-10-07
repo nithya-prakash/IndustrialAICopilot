@@ -253,15 +253,30 @@ Human Approval, Frontend, Observability, Evaluation, CI/CD, Final Polish.
 - **RAGAS** (`python -m evaluation.ragas_eval`, own venv via `requirements-eval.txt`), 7 questions over
   the sample manual, judge = local `qwen2.5:7b`: faithfulness **1.00**, context precision (no reference)
   **0.91** (7/7 scored). Caveat: tiny set, one manual, and a 7B judge grading a 7B generator; read it as a
-  sanity check, not a benchmark. Langfuse export is implemented but untested (no Langfuse instance).
+  sanity check, not a benchmark. Scores are exported to Langfuse (see below).
 - **Locust** (`loadtest/locustfile.py`, AI endpoints skipped, 5 users, 45 s, local Docker, 95 requests,
   0 failures): `/health` avg 11 ms, `GET /diagnoses` avg 24 ms (p99 160 ms), login avg 1.6 s (password
   hashing). Light load on one laptop; AI endpoints are rate limited and model-bound, so not load-tested.
 - **Provider switch**: `LLM_PROVIDER=groq|gemini` uses their OpenAI-compatible endpoints (set `LLM_API_KEY`);
   unit-tested for URL selection only, no live call made.
-- **Injection screen** (`app/guardrails.py`): regex tripwire on tool/retrieved text; flagged content is
-  disclosed in the diagnosis `limitations`. Tested on 8 attack and 5 benign strings; paraphrased or
-  non-English attacks will pass. This is not the Guardrails AI library.
+- **Injection screens, compared** (`python -m evaluation.injection_eval --llm-guard`; 20 hand-written synthetic attacks
+  in `data/evaluation/injection_attacks.json`; benign = 7 real manual chunks + 15 synthetic tricky-benign sentences):
+
+  | Screen | Attacks caught | False positives |
+  |---|---|---|
+  | Regex tripwire (`app/guardrails.py`, default) | 8/20 (direct 7/7, paraphrase/indirect/German/obfuscated 0/12) | 4/22 |
+  | [llm-guard](https://github.com/protectai/llm-guard) `PromptInjection` (`INJECTION_SCANNER=llm_guard`, ~46 ms/call on CPU) | 15/20 | 2/22 |
+  | Regex OR llm-guard | 18/20 | 6/22 |
+
+  Flagged content is only *disclosed* in the diagnosis `limitations` (it is never dropped), so a false positive costs a
+  note, not a wrong answer. Small, self-written sets: indicative, not a benchmark. The llm-guard scanner is optional
+  (`pip install llm-guard`, downloads a local model on first use). The default is still the regex screen.
+- **Langfuse** (self-hosted locally with Langfuse's official compose file; project created headlessly via
+  `LANGFUSE_INIT_*`): `python -m evaluation.ragas_eval export-langfuse <report.json>` writes one trace per question
+  (question, retrieved contexts, answer) with its RAGAS scores, plus a run-summary trace. Verified in the Langfuse UI:
+  8 traces, per-question scores and the mean scores (faithfulness 1.00, context precision 0.91). Needs
+  `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`. The same export runs automatically at the end of
+  `ragas_eval score` when those are set.
 
 ## Possible next steps
 

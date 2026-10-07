@@ -433,7 +433,8 @@ async def run_diagnosis(
 
     if injection_flags:
         limitations.append(
-            "Retrieved content contained instruction-like text (" + ", ".join(sorted(injection_flags))
+            "Retrieved content contained instruction-like text ("
+            + ", ".join(sorted(injection_flags))
             + "); it was treated as data, but the source documents should be reviewed."
         )
 

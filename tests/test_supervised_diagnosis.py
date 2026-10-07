@@ -21,8 +21,12 @@ async def test_supervised_diagnosis_persists_and_resumes(db_session: AsyncSessio
     monkeypatch.setattr(supervised.get_settings(), "confidence_approval_threshold", 0.99)
 
     diagnosis = await supervised.run_supervised_diagnosis(
-        db_session, tenant_id="acme", user_id=uuid.uuid4(), conversation_id=None,
-        question="Why hot?", model_call=FakeModel(["documents", "synthesize"]),
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why hot?",
+        model_call=FakeModel(["documents", "synthesize"]),
     )
     assert diagnosis.status == DiagnosisStatus.completed
     assert diagnosis.requires_human_approval is True
