@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// An empty VITE_API_BASE_URL means "same origin" (the single-container demo deployment).
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const TOKEN_STORAGE_KEY = "industrial_copilot_token";
 
 export class ApiError extends Error {
@@ -56,7 +57,7 @@ interface RequestOptions {
 }
 
 function buildUrl(path: string, params?: RequestOptions["params"]): string {
-  const url = new URL(API_BASE_URL + path);
+  const url = new URL(API_BASE_URL + path, window.location.origin);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== "") {
