@@ -10,7 +10,8 @@
         [
           "alignment"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "At what vibration level should I investigate further?",
@@ -20,7 +21,8 @@
         [
           "4.5"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "What are the common causes of excessive vibration?",
@@ -34,7 +36,8 @@
         [
           "bearing"
         ]
-      ]
+      ],
+      "split": "heldout"
     },
     {
       "question": "What typically causes motor overheating?",
@@ -47,7 +50,8 @@
         [
           "ventilation"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "How much above ambient should a winding temperature be before I schedule an inspection?",
@@ -57,7 +61,8 @@
         [
           "40"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "Which parts should I clean when the motor runs hot?",
@@ -70,7 +75,8 @@
         [
           "shroud"
         ]
-      ]
+      ],
+      "split": "heldout"
     },
     {
       "question": "What does a grinding or rumbling noise usually mean?",
@@ -80,7 +86,8 @@
         [
           "bearing"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "What can a high-pitched whine from the motor indicate?",
@@ -91,7 +98,8 @@
           "voltage",
           "frequency"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "What does a rhythmic knocking that varies with shaft speed suggest?",
@@ -105,7 +113,8 @@
         [
           "rotor"
         ]
-      ]
+      ],
+      "split": "heldout"
     },
     {
       "question": "Should bearings be replaced individually or in pairs?",
@@ -115,7 +124,8 @@
         [
           "pair"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "When should sealed bearings be re-greased?",
@@ -127,7 +137,8 @@
           "relubrication",
           "re-lubricat"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "Can different greases be mixed?",
@@ -141,7 +152,8 @@
         [
           "nameplate"
         ]
-      ]
+      ],
+      "split": "heldout"
     },
     {
       "question": "What must I do before any inspection or maintenance on the motor?",
@@ -156,7 +168,8 @@
           "de-energized",
           "de-energised"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "How hot can the motor housing get during normal operation?",
@@ -166,7 +179,8 @@
         [
           "70"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "How should the motor be mounted to reduce vibration transfer?",
@@ -179,7 +193,8 @@
         [
           "level"
         ]
-      ]
+      ],
+      "split": "heldout"
     },
     {
       "question": "What should be done with the foot-mounting bolts at installation?",
@@ -189,39 +204,49 @@
         [
           "torque"
         ]
-      ]
+      ],
+      "split": "tuning"
     },
     {
       "question": "What is the warranty period for this motor?",
-      "answerable": false
+      "answerable": false,
+      "split": "tuning"
     },
     {
       "question": "How do I rewire the motor from star to delta?",
-      "answerable": false
+      "answerable": false,
+      "split": "tuning"
     },
     {
       "question": "What is the replacement bearing part number for a 132 frame?",
-      "answerable": false
+      "answerable": false,
+      "split": "heldout"
     },
     {
       "question": "What is the insulation class of this motor?",
-      "answerable": false
+      "answerable": false,
+      "split": "tuning"
     },
     {
       "question": "What is the maximum rated ambient temperature?",
-      "answerable": false
+      "answerable": false,
+      "split": "tuning"
     },
     {
       "question": "How do I program the variable frequency drive for this motor?",
-      "answerable": false
+      "answerable": false,
+      "split": "heldout"
     },
     {
       "question": "What is the noise level of this motor in decibels?",
-      "answerable": false
+      "answerable": false,
+      "split": "tuning"
     },
     {
       "question": "How much does a replacement rotor cost?",
-      "answerable": false
+      "answerable": false,
+      "split": "tuning"
     }
-  ]
+  ],
+  "split_note": "Every third question in each group is held out. The retrieval relevance cut-off is calibrated on 'tuning' only; 'heldout' is used once to report it."
 }

@@ -105,11 +105,12 @@ class Settings(BaseSettings):
     rerank_top_k: int = 5
     # Cross-encoder logits are unbounded (not a [0,1] probability) and their range depends on the
     # model, so the right cut-off must be read off the score distribution of RERANK_MODEL.
-    # -4.0 comes from the 24-question set in data/evaluation/answer_eval.json with the default
-    # ms-marco-MiniLM-L-6-v2: best passages for all answerable questions scored >= -3.6, while 4 of
-    # 8 questions the manual cannot answer scored below -4.7. It was set on that same small set,
-    # so treat it as a starting point; re-check it if you change the reranker or the manuals.
-    min_relevance_score: float = -4.0
+    # -1.15 was chosen on the 17 "tuning" questions of data/evaluation/answer_eval.json only
+    # (python -m evaluation.calibrate_cutoff) and then scored once on the 7 held-out questions:
+    # 4/5 answerable passed and 1/2 unanswerable were blocked (balanced accuracy 0.65; the earlier
+    # hand-picked -4.0 scored 0.5 there). Seven questions is a very small test, so treat it as a
+    # starting point and re-run the script when the reranker or the manuals change.
+    min_relevance_score: float = -1.15
 
     confidence_approval_threshold: float = 0.75
     diagnosis_timeout_seconds: int = 5
