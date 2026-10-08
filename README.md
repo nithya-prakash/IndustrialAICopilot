@@ -22,6 +22,7 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 |---|---|---|
 | Retrieval MRR, hybrid + rerank | 0.886 (dense-only scored 0.929) | 7 hand-labelled questions, `python -m evaluation.retrieval_ablation` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
+| Answer quality, tool-loop agent | fact coverage 0.91, citation precision 0.91, overconfident on 2/8 unanswerable questions, unsupported numbers in 1/24 answers | 24 questions (16 answerable, 8 not) on the sample manual, Groq `gpt-oss-20b`, deterministic scoring (`python -m evaluation.answer_eval`); without the relevance cut-off it was overconfident on 3/3 completed unanswerable questions (a different model, `gpt-oss-120b`) |
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
 | API latency under load | read endpoints: p50 10 ms, p95 23 ms, 0 failures in 1,284 requests (14.9 req/s offered); login p50 2.3 s | Locust, 20 users, 90 s, local Docker, rate limits raised |
 | AI endpoints, 2 concurrent users | 2 of 4 diagnoses completed; failures: 1 provider rate limit, 1 empty model answer (now retried) | Locust, Groq free tier; tiny sample, bounded by the provider |
@@ -106,7 +107,7 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
 
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
-- Evaluation sets are tiny (7 questions, 20 attacks), and a 7B model judged a 7B model in the RAGAS run.
+- Evaluation sets are tiny (7 to 24 questions, 20 attacks), the relevance cut-off was set on the same 24 questions,, and a 7B model judged a 7B model in the RAGAS run.
 - Free-text sensor findings are not validated, and a small local vision model gave shallow image observations.
 - Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
   incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each
