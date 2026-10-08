@@ -20,7 +20,7 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 
 | Metric | Result | Dataset and method |
 |---|---|---|
-| Retrieval MRR, hybrid + rerank | 0.886 (dense-only scored 0.929) | 7 hand-labelled questions, `python -m evaluation.retrieval_ablation` |
+| Retrieval MRR (recall@1) | BM25 0.939 (0.906), dense 0.903 (0.849), hybrid 0.953 (0.925), hybrid + rerank 0.950 (0.943) | 53 labelled questions over 4 manuals (45 chunks; 3 are synthetic), `python -m evaluation.retrieval_ablation` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
 | Answer quality, tool-loop agent | fact coverage 0.91, citation precision 0.91, overconfident on 2/8 unanswerable questions, unsupported numbers in 1/24 answers | 24 questions (16 answerable, 8 not) on the sample manual, Groq `gpt-oss-20b`, deterministic scoring (`python -m evaluation.answer_eval`); relevance cut-off -4.0 at the time; without it, overconfident on 3/3 unanswerable questions (a different model, `gpt-oss-120b`). The cut-off is now -1.15, set on a tuning split; re-run pending |
 | Relevance cut-off, held-out check | -1.15: 4/5 answerable questions pass, 1/2 unanswerable blocked (balanced accuracy 0.65; perfect on the tuning questions) | 17 tuning / 7 held-out questions, retrieval scores only (`python -m evaluation.calibrate_cutoff`); far too small to be conclusive |
@@ -102,9 +102,10 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
 - **A supervisor with specialists** (documents, sensors, vision, history, maintenance planner) keeps each step's tools
   and prompt small, and every step observable. The older single tool-loop agent is kept: it is faster and simpler for
   easy questions.
-- **Hybrid retrieval plus a cross-encoder** as a design choice for manuals that mix exact terms (part names, limits)
-  with paraphrased symptoms. The measured evidence does not yet support it: on the 7-question set, dense-only scored
-  the best MRR (0.929 vs 0.886 for hybrid + rerank), with only 7 chunks in the corpus. A larger corpus is needed to test it.
+- **Hybrid retrieval plus a cross-encoder**, because manuals mix exact terms (part names, limits) with paraphrased
+  symptoms. On 53 questions hybrid beats each method alone, but only by 0.01 to 0.05 MRR, which is within noise for
+  that sample, and the questions were written from the same manual text, which favours keyword matching. The earlier
+  7-question run had dense-only ahead. A large independent corpus is still needed to settle it.
 - **Approval as a graph `interrupt()` stored in Postgres** so a pending decision survives restarts and the model
   never acts on its own output.
 - **Everything behind one provider switch** (`LLM_PROVIDER`), so the same evaluation runs on a hosted or local model.
@@ -115,7 +116,7 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
 
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
-- Evaluation sets are tiny (7 to 24 questions, 20 attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
+- Evaluation sets are tiny (24 to 53 questions, 20 attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
 - Free-text sensor findings are not validated, and a small local vision model gave shallow image observations.
 - Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
   incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each

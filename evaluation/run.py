@@ -14,6 +14,7 @@ Self-contained: if the synthetic sample manual isn't indexed yet under the
 can run this with just `docker compose up` beforehand — no manual upload
 step required.
 """
+
 import asyncio
 import json
 import sys
@@ -76,13 +77,13 @@ async def _ensure_eval_user(db) -> User:
     return user
 
 
-async def _ensure_sample_manual_indexed(db, owner: User) -> None:
+async def _ensure_manual_indexed(db, owner: User, path: Path) -> None:
     result = await db.execute(
         select(Document)
         .options(selectinload(Document.versions))
         .where(
             Document.tenant_id == EVAL_TENANT,
-            Document.original_filename == "electric_motor_manual.pdf",
+            Document.original_filename == path.name,
         )
     )
     document = result.scalar_one_or_none()
@@ -91,25 +92,31 @@ async def _ensure_sample_manual_indexed(db, owner: User) -> None:
         if current is not None and current.status == DocumentStatus.ready:
             return
 
-    if not MANUAL_PATH.exists():
+    if not path.exists() and path == MANUAL_PATH:
         from scripts.generate_sample_manual import build_pdf
 
         build_pdf()
 
-    print("Indexing sample manual for evaluation (first run only)...")
+    print(f"Indexing {path.name} for evaluation (first run only)...")
     _, version = await create_document_version(
         db,
         owner_id=owner.id,
         tenant_id=EVAL_TENANT,
-        filename="electric_motor_manual.pdf",
+        filename=path.name,
         content_type="application/pdf",
-        content=MANUAL_PATH.read_bytes(),
-        equipment_type="electric_motor",
-        equipment_id="MOTOR-001",
+        content=path.read_bytes(),
+        equipment_type=path.stem,
+        equipment_id=path.stem.upper()[:32],
         document_id=document.id if document is not None else None,
         dispatch_processing=False,
     )
     await process_document_version(version.id)
+
+
+async def _ensure_sample_manual_indexed(db, owner: User) -> None:
+    """Indexes the sample motor manual and every synthetic evaluation manual (first run only)."""
+    for path in [MANUAL_PATH, *sorted((_DATA_DIR / "manuals" / "eval").glob("*.pdf"))]:
+        await _ensure_manual_indexed(db, owner, path)
 
 
 async def run() -> dict:
@@ -125,9 +132,7 @@ async def run() -> dict:
 
     async with AsyncSessionLocal() as db:
         for item in questions:
-            chunks = await hybrid_search(
-                db, item["question"], tenant_id=EVAL_TENANT, top_k=10
-            )
+            chunks = await hybrid_search(db, item["question"], tenant_id=EVAL_TENANT, top_k=10)
             retrieved_keys = [_source_key(c) for c in chunks]
             relevant = set(item["expected_sources"])
 
