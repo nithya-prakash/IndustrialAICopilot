@@ -64,6 +64,10 @@ docker compose up --build
 
 Open http://localhost:3002 and create a workspace (you become its admin). API docs: http://localhost:8000/docs.
 
+Share a live demo from your own machine: `deploy/demo-tunnel.sh` starts a single-container build (all services, seeded
+demo workspace; logins `demo_technician` / `demo_supervisor`, password `Demo-Copilot-2026`) behind a free Cloudflare
+tunnel and prints a public URL. It works only while your machine and Docker are running, and `deploy/demo-tunnel.sh stop` ends it.
+
 ## Tech stack
 
 FastAPI, LangGraph, SQLAlchemy, PostgreSQL, Qdrant, Celery, Redis, sentence-transformers, React, TypeScript,
@@ -76,7 +80,8 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
 - Evaluation sets are tiny (7 questions, 20 attacks), and a 7B model judged a 7B model in the RAGAS run.
 - Free-text sensor findings are not validated, and a small local vision model gave shallow image observations.
 - Paused approvals use in-memory graph checkpoints, so a restart drops the pause (the database record remains).
-- Not deployed publicly; the Docker Compose stack runs locally.
+- No permanent hosted instance: Hugging Face now charges for Docker Spaces, so the demo is a single container shared on
+  demand through a tunnel (`deploy/`).
 
 <details>
 <summary>Repo layout, tests and more detail</summary>
