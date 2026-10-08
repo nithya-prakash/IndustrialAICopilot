@@ -23,7 +23,8 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 | Retrieval MRR, hybrid + rerank | 0.886 (dense-only scored 0.929) | 7 hand-labelled questions, `python -m evaluation.retrieval_ablation` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
-| API latency under load | health avg 11 ms; diagnoses list avg 24 ms, p99 160 ms; 0 failures in 95 requests | Locust, 5 users, 45 s, local Docker; AI endpoints excluded |
+| API latency under load | read endpoints: p50 10 ms, p95 23 ms, 0 failures in 1,284 requests (14.9 req/s offered); login p50 2.3 s | Locust, 20 users, 90 s, local Docker, rate limits raised |
+| AI endpoints, 2 concurrent users | 2 of 4 diagnoses completed; failures: 1 provider rate limit, 1 empty model answer (now retried) | Locust, Groq free tier; tiny sample, bounded by the provider |
 | Injection screen, attacks caught | regex 8/20, llm-guard 15/20, both 18/20 | 20 synthetic attacks; false positives 4/22, 2/22, 6/22 on 22 benign texts |
 
 All sets are small and self-written: they check that the pipeline works and show relative differences, not general

@@ -354,3 +354,33 @@ def test_gpt_oss_defaults_to_low_reasoning_effort_and_can_be_overridden(monkeypa
     monkeypatch.setattr(s, "llm_reasoning_effort", "")
     monkeypatch.setattr(s, "llm_model", "llama3.2:3b")
     assert _reasoning_kwargs(s) == {}
+
+
+async def test_empty_answer_is_retried_once_without_tools(monkeypatch):
+    import openai
+
+    from app.config import get_settings
+    from app.rag import generation
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "llm_api_key", "test-key")
+    calls = []
+
+    def response(text):
+        message = type("M", (), {"content": text, "tool_calls": None})()
+        return type("R", (), {"choices": [type("C", (), {"message": message})()], "usage": None})()
+
+    async def create(**kwargs):
+        calls.append(kwargs)
+        return response("" if len(calls) == 1 else '{"summary": "second try"}')
+
+    class FakeClient:
+        def __init__(self, **_):
+            completions = type("Comp", (), {"create": staticmethod(create)})()
+            self.chat = type("Chat", (), {"completions": completions})()
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", FakeClient)
+    turn = await generation.call_model([{"role": "user", "content": "q"}], "sys")
+    assert turn.text == '{"summary": "second try"}' and len(calls) == 2
+    assert "tools" in calls[0] and "tools" not in calls[1]

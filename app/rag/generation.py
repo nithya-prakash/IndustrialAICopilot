@@ -249,6 +249,16 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
     )
 
     choice = response.choices[0].message
+    if not choice.tool_calls and not (choice.content or "").strip():
+        # Some models (observed: gpt-oss under load) occasionally return nothing at all. Ask once
+        # more, as plain JSON without tools, before the caller has to give up.
+        try:
+            response = await create(
+                [*openai_messages, {"role": "user", "content": _FINAL_ANSWER_NUDGE}], False
+            )
+            choice = response.choices[0].message
+        except Exception:  # noqa: BLE001 - keep the original (empty) result if the retry fails
+            pass
     try:
         tool_calls = [
             ModelToolCall(
