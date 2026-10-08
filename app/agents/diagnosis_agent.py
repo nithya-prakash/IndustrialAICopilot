@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.confidence import EvidenceSignals, calculate_confidence, normalize_severity
 from app.agents.confidence import requires_human_approval as compute_requires_approval
+from app.agents.sensor_validation import validate_sensor_findings
 from app.config import get_settings
 from app.guardrails import sanitize_recommendations, scan_obj
 from app.llm.client import LLMError
@@ -471,6 +472,18 @@ async def _run_diagnosis(
     )
     severity = DiagnosisSeverity(severity_str)
 
+    sensor_findings, dropped_findings = validate_sensor_findings(
+        parsed.get("sensor_findings"),
+        evidence,
+        json.dumps(sensor_snapshot or {}) + " " + question,
+    )
+    if dropped_findings:
+        limitations.append(
+            f"{dropped_findings} sensor finding(s) were discarded because their metric or the "
+            "values "
+            "they stated did not match the retrieved sensor data."
+        )
+
     summary = str(parsed.get("summary", "")) or "(no summary provided)"
     recommended_checks = [
         str(c) for c in parsed.get("recommended_checks", []) if isinstance(c, str)
@@ -498,7 +511,7 @@ async def _run_diagnosis(
         status=DiagnosisStatus.completed,
         summary=summary,
         visual_observations=parsed.get("visual_observations") or [],
-        sensor_findings=parsed.get("sensor_findings") or [],
+        sensor_findings=sensor_findings,
         possible_causes=causes,
         recommended_checks=recommended_checks,
         recommended_action=recommended_action,

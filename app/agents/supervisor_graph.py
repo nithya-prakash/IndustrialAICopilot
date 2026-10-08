@@ -31,6 +31,7 @@ from app.agents.diagnosis_agent import (
     _summarize_tool_output,
     _validate_causes,
 )
+from app.agents.sensor_validation import validate_sensor_findings
 from app.guardrails import sanitize_recommendations
 from app.observability.metrics import (
     agent_specialist_duration_seconds,
@@ -227,6 +228,9 @@ def build_supervisor_graph(
             )
         )
         severity = normalize_severity(parsed.get("severity"))
+        sensor_findings, dropped_findings = validate_sensor_findings(
+            parsed.get("sensor_findings"), evidence, state.get("request_context", "")
+        )
         action, _checks, unsafe_blocked = sanitize_recommendations(
             str(parsed.get("recommended_action") or ""), []
         )
@@ -239,6 +243,8 @@ def build_supervisor_graph(
                 "possible_causes": causes,
                 "recommended_action": action,
                 "unsafe_blocked": unsafe_blocked,
+                "sensor_findings": sensor_findings,
+                "dropped_sensor_findings": dropped_findings,
                 "severity": severity,
                 "confidence": confidence,
                 "dropped_citations": dropped,

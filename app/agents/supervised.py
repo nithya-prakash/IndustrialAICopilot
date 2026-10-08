@@ -132,6 +132,7 @@ async def _run_supervised_diagnosis(
         possible_causes=result["possible_causes"],
         recommended_action=result["recommended_action"],
         recommended_checks=result.get("recommended_checks", []),
+        sensor_findings=result.get("sensor_findings", []),
         confidence=result["confidence"],
         severity=DiagnosisSeverity(result["severity"]),
         requires_human_approval=result["requires_human_approval"],
@@ -152,6 +153,15 @@ async def _run_supervised_diagnosis(
                 + ") and was withheld; a supervisor must review this diagnosis."
             ]
             if result.get("unsafe_blocked")
+            else []
+        )
+        + (
+            [
+                f"{result['dropped_sensor_findings']} sensor finding(s) were discarded because "
+                "their "
+                "metric or stated values did not match the retrieved sensor data."
+            ]
+            if result.get("dropped_sensor_findings")
             else []
         ),
         llm_provider=settings.llm_provider,

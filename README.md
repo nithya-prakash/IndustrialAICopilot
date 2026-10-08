@@ -119,7 +119,8 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
 - Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
-- Free-text sensor findings are not validated, and a small local vision model gave shallow image observations.
+- Sensor findings are checked against the retrieved sensor data (metric and stated numbers) and dropped when they do not
+  match; the model's other free text is not. A small local vision model gave shallow image observations.
 - Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
   incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each
   call, which suits hundreds of incidents, not a large history.
