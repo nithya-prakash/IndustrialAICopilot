@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass, field
 
 from app.config import OPENAI_COMPATIBLE_BASE_URLS, get_settings
-from app.core.retry import call_with_retry, is_transient_llm_error
+from app.core.retry import call_with_retry, describe_llm_failure, is_transient_llm_error
 from app.llm.client import LLMError
 from app.observability import tracing
 from app.observability.metrics import record_llm_call
@@ -84,7 +84,7 @@ async def _call_anthropic(messages: list[dict], system: str, use_tools: bool = T
         # `except (LLMError, AgentError)` handler persists a clean "failed"
         # diagnosis with a real error message instead of leaking an
         # unhandled 500 once retries (see app/core/retry.py) are exhausted.
-        raise LLMError(f"LLM call failed: {exc}") from exc
+        raise LLMError(describe_llm_failure(exc)) from exc
     record_llm_call(
         provider="anthropic",
         model=settings.llm_model,
@@ -235,7 +235,7 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
             status="error",
             duration_seconds=time.perf_counter() - start,
         )
-        raise LLMError(f"LLM call failed: {exc}") from exc
+        raise LLMError(describe_llm_failure(exc)) from exc
 
     usage = response.usage
     record_llm_call(

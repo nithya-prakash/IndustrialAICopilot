@@ -3,6 +3,7 @@ transient failures, gives up after a bounded number of attempts, and never
 retries a permanent (non-transient) error — plus that the real call sites
 (LLM agent call, vision call) are wired through it.
 """
+
 import anthropic
 import openai
 import pytest
@@ -225,9 +226,7 @@ async def test_diagnosis_agent_call_model_retries_transient_failure_then_succeed
 
     responses = [_timeout_error(), _FakeAnthropicResponse('{"summary": "ok"}')]
     fake_client = _FakeAnthropicClient(responses)
-    monkeypatch.setattr(
-        "anthropic.AsyncAnthropic", lambda **kwargs: fake_client
-    )
+    monkeypatch.setattr("anthropic.AsyncAnthropic", lambda **kwargs: fake_client)
 
     turn = await call_model([{"role": "user", "content": "hi"}], "system prompt")
 
@@ -254,9 +253,7 @@ async def test_vision_analyze_image_retries_transient_failure_then_succeeds(
     )
     responses = [_timeout_error(), _FakeAnthropicResponse(valid_json)]
     fake_client = _FakeAnthropicClient(responses)
-    monkeypatch.setattr(
-        "anthropic.AsyncAnthropic", lambda **kwargs: fake_client
-    )
+    monkeypatch.setattr("anthropic.AsyncAnthropic", lambda **kwargs: fake_client)
 
     result = await analyze_image(b"fake-image-bytes", "image/jpeg", question="what's wrong?")
 
@@ -280,11 +277,94 @@ async def test_vision_analyze_image_final_error_after_exhausted_retries(
 
     responses = [_timeout_error(), _timeout_error(), _timeout_error()]
     fake_client = _FakeAnthropicClient(responses)
-    monkeypatch.setattr(
-        "anthropic.AsyncAnthropic", lambda **kwargs: fake_client
-    )
+    monkeypatch.setattr("anthropic.AsyncAnthropic", lambda **kwargs: fake_client)
 
     with pytest.raises(VisionError, match="timed out|Vision analysis failed"):
         await analyze_image(b"fake-image-bytes", "image/jpeg")
 
     assert fake_client.messages.call_count == 3  # bounded, matches retry_max_attempts
+
+
+# --- provider hints, quota detection, failure descriptions ---------------------------------------
+def _rate_limit(message: str, retry_after: str | None = None):
+    import httpx
+    import openai
+
+    headers = {"retry-after": retry_after} if retry_after else {}
+    response = httpx.Response(429, headers=headers, request=httpx.Request("POST", "http://x"))
+    return openai.RateLimitError(message, response=response, body={})
+
+
+def test_retry_after_comes_from_the_header_or_the_message():
+    from app.core.retry import retry_after_seconds
+
+    assert retry_after_seconds(_rate_limit("slow down", "7")) == 7.0
+    assert retry_after_seconds(_rate_limit("Please try again in 4m57.5s.")) == 297.5
+    assert retry_after_seconds(_rate_limit("Please try again in 12s")) == 12.0
+    assert retry_after_seconds(_rate_limit("no hint")) is None
+
+
+def test_daily_quota_and_long_waits_are_not_retried_but_short_limits_are():
+    from app.core.retry import is_quota_exhausted, is_transient_llm_error
+
+    daily = _rate_limit("Rate limit reached on tokens per day (TPD). Please try again in 4m57s")
+    assert is_quota_exhausted(daily) and not is_transient_llm_error(daily)
+    long_wait = _rate_limit("limited", "300")
+    assert not is_transient_llm_error(long_wait)
+    short = _rate_limit("limited", "3")
+    assert is_transient_llm_error(short) and not is_quota_exhausted(short)
+
+
+def test_failure_descriptions_are_readable():
+    from app.core.retry import describe_llm_failure
+
+    daily = _rate_limit("tokens per day (TPD) ... Please try again in 4m57s")
+    assert "usage limit was reached" in describe_llm_failure(
+        daily
+    ) and "5 minute" in describe_llm_failure(daily)
+    assert "rate limiting" in describe_llm_failure(_rate_limit("limited", "3"))
+    assert describe_llm_failure(RuntimeError("boom")) == "LLM call failed: boom"
+
+
+async def test_short_rate_limit_is_retried_with_the_provider_hint(monkeypatch):
+    import asyncio
+
+    from app.config import get_settings
+    from app.core.retry import call_with_retry, is_transient_llm_error
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "retry_max_attempts", 3)
+    monkeypatch.setattr(settings, "retry_wait_min_seconds", 0.0)
+    monkeypatch.setattr(settings, "retry_wait_max_seconds", 0.0)
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    calls = []
+
+    async def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise _rate_limit("limited", "2")
+        return "ok"
+
+    assert await call_with_retry("llm_agent", is_transient_llm_error, flaky) == "ok"
+    assert len(calls) == 3 and sleeps and all(s >= 2.0 for s in sleeps)
+
+
+async def test_daily_quota_fails_immediately_without_retries():
+    import pytest
+
+    from app.core.retry import call_with_retry, is_transient_llm_error
+
+    calls = []
+
+    async def exhausted():
+        calls.append(1)
+        raise _rate_limit("tokens per day (TPD). Please try again in 4m57s")
+
+    with pytest.raises(Exception, match="per day"):
+        await call_with_retry("llm_agent", is_transient_llm_error, exhausted)
+    assert len(calls) == 1

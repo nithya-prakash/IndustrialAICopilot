@@ -14,7 +14,9 @@ e.g. just `client.messages.create(...)`, not response parsing — so a bug in
 parsing a successful response can never be mistaken for a transient failure
 and retried pointlessly.
 """
+
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -48,8 +50,68 @@ _TRANSIENT_LLM_EXCEPTIONS = (
 )
 
 
+# A provider hint longer than this (or any "per day" limit) cannot be waited out inside one request.
+MAX_HONORED_RETRY_AFTER = 60.0
+_TRY_AGAIN = re.compile(
+    r"try again in (?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?", re.I
+)
+
+
+def retry_after_seconds(exc: BaseException) -> float | None:
+    """The provider's wait hint: a Retry-After header, else 'try again in 4m57.6s' in the text."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if headers is not None:
+        value = headers.get("retry-after")
+        try:
+            if value is not None:
+                return float(value)
+        except ValueError:
+            pass
+    match = _TRY_AGAIN.search(str(exc))
+    if match and any(match.groups()):
+        hours, minutes, seconds = (float(g) if g else 0.0 for g in match.groups())
+        return hours * 3600 + minutes * 60 + seconds
+    return None
+
+
+def is_quota_exhausted(exc: BaseException) -> bool:
+    """A rate limit that backing off for a few seconds cannot fix (daily quota, long wait)."""
+    if not isinstance(exc, openai.RateLimitError | anthropic.RateLimitError):
+        return False
+    hint = retry_after_seconds(exc)
+    return "per day" in str(exc).lower() or (hint is not None and hint > MAX_HONORED_RETRY_AFTER)
+
+
 def is_transient_llm_error(exc: BaseException) -> bool:
-    return isinstance(exc, _TRANSIENT_LLM_EXCEPTIONS)
+    return isinstance(exc, _TRANSIENT_LLM_EXCEPTIONS) and not is_quota_exhausted(exc)
+
+
+def describe_llm_failure(exc: BaseException) -> str:
+    """User-facing reason for a failed model call, instead of a raw provider payload."""
+    if is_quota_exhausted(exc):
+        hint = retry_after_seconds(exc)
+        when = f" Try again in about {round(hint / 60)} minute(s)." if hint else ""
+        return f"The model provider's usage limit was reached.{when}"
+    if isinstance(exc, openai.RateLimitError | anthropic.RateLimitError):
+        return "The model provider is rate limiting requests; please retry shortly."
+    return f"LLM call failed: {exc}"
+
+
+def _wait_with_hint(settings) -> Callable[[object], float]:
+    """Exponential backoff, raised to the provider's Retry-After hint when it gives one."""
+    exponential = wait_exponential(
+        multiplier=1, min=settings.retry_wait_min_seconds, max=settings.retry_wait_max_seconds
+    )
+
+    def wait(retry_state) -> float:
+        delay = exponential(retry_state)
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
+        hint = retry_after_seconds(exc) if exc is not None else None
+        if hint is not None:
+            delay = max(delay, min(hint, MAX_HONORED_RETRY_AFTER))
+        return delay
+
+    return wait
 
 
 def is_transient_qdrant_error(exc: BaseException) -> bool:
@@ -89,11 +151,7 @@ async def call_with_retry(
     retrying = AsyncRetrying(
         retry=retry_if_exception(is_transient),
         stop=stop_after_attempt(settings.retry_max_attempts),
-        wait=wait_exponential(
-            multiplier=1,
-            min=settings.retry_wait_min_seconds,
-            max=settings.retry_wait_max_seconds,
-        ),
+        wait=_wait_with_hint(settings),
         before_sleep=_before_sleep(operation),
         reraise=True,
     )
