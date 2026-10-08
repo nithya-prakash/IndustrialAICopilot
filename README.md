@@ -12,6 +12,9 @@ high-severity results are held for a supervisor to approve.
 
 *Recorded against the local stack with a real model (Groq `gpt-oss-20b`); the [older recording](docs/images/supervisor-demo.gif) shows a low-confidence result being held and rejected.*
 
+**Status: frozen at v1.0.** No further feature work is planned. Known gaps are listed under Limitations: no permanent
+hosted instance, small and partly synthetic evaluation sets, and untested Gemini/OpenAI and vLLM paths.
+
 ## Why
 
 Plain RAG chatbots answer from whatever they retrieve. On a plant floor a wrong answer has a cost, so here the
