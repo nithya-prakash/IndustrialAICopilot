@@ -131,6 +131,7 @@ async def _run_supervised_diagnosis(
         summary=result["summary"] or "(no summary provided)",
         possible_causes=result["possible_causes"],
         recommended_action=result["recommended_action"],
+        recommended_checks=result.get("recommended_checks", []),
         confidence=result["confidence"],
         severity=DiagnosisSeverity(result["severity"]),
         requires_human_approval=result["requires_human_approval"],

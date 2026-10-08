@@ -43,6 +43,18 @@ SPECIALIST_TOOLS: dict[str, set[str]] = {
     "history": {"search_past_incidents", "get_maintenance_schedule"},
     "vision": {"analyze_component_image"},
 }
+RECOMMEND_PROMPT = (
+    "You are the maintenance planner. Given a technician's question, the diagnosis (summary and "
+    "ranked causes) and the gathered evidence (manual passages, maintenance schedule status, "
+    "similar approved past incidents), write the maintenance plan. Reply with ONLY JSON: "
+    '{"recommended_action": "...", "recommended_checks": ["..."], '
+    '"urgency": "immediate|soon|routine", "safety_notes": ["..."]}. '
+    "Rules: base steps on the evidence, and say when the evidence is thin; start any physical "
+    "work with isolation and lockout; never suggest bypassing a safety device, working on live "
+    "equipment, exceeding ratings or ignoring an alarm; do not invent part numbers, values or "
+    "intervals that are not in the evidence; prefer inspection and supervisor review over guessing."
+)
+URGENCIES = ("immediate", "soon", "routine")
 MAX_SPECIALIST_STEPS = 3
 MAX_SUPERVISOR_STEPS = 5
 
@@ -239,6 +251,54 @@ def build_supervisor_graph(
             }
         }
 
+    async def recommend(state: DiagnosisState) -> dict:
+        """The maintenance planner: turns the diagnosis and evidence into an action plan. Its
+        output passes the same unsafe-action filter as everything else; if its answer cannot be
+        parsed, the synthesis step's own recommendation stands."""
+        diagnosis = state["diagnosis"]
+        if diagnosis.get("status") != "completed":
+            return {}
+        digest = json.dumps(state.get("evidence", []), default=str)[:8000]
+        causes = [c["cause"] for c in diagnosis.get("possible_causes", [])][:5]
+        turn = await plain_call(
+            [
+                {
+                    "role": "user",
+                    "content": f"{state['request_context']}\n\nDiagnosis: "
+                    f"{diagnosis.get('summary')}\nRanked causes: {json.dumps(causes)}\n"
+                    f"Severity: {diagnosis.get('severity')}\n\nEvidence:\n{digest}",
+                }
+            ],
+            RECOMMEND_PROMPT,
+        )
+        try:
+            plan = _parse_diagnosis_json(turn.text)
+        except AgentError:
+            return {}
+        checks = [str(c) for c in plan.get("recommended_checks", []) if isinstance(c, str)]
+        notes = [str(n) for n in plan.get("safety_notes", []) if isinstance(n, str)]
+        action = str(plan.get("recommended_action") or "") or diagnosis.get(
+            "recommended_action", ""
+        )
+        urgency = plan.get("urgency") if plan.get("urgency") in URGENCIES else "soon"
+        action, checks, blocked = sanitize_recommendations(action, [*checks, *notes])
+        for category in blocked:
+            unsafe_actions_blocked_total.labels(category=category).inc()
+        if checks and notes:  # keep the planner's safety notes visible, ahead of the checks
+            checks = [c for c in checks if c in notes] + [c for c in checks if c not in notes]
+        merged_blocked = sorted({*diagnosis.get("unsafe_blocked", []), *blocked})
+        return {
+            "diagnosis": {
+                **diagnosis,
+                "recommended_action": f"[Urgency: {urgency}] {action}".strip(),
+                "recommended_checks": checks,
+                "urgency": urgency,
+                "unsafe_blocked": merged_blocked,
+                "requires_human_approval": bool(diagnosis.get("requires_human_approval"))
+                or bool(merged_blocked),
+            }
+        }
+
     async def approval_gate(state: DiagnosisState) -> dict:
         diagnosis = state["diagnosis"]
         if not diagnosis.get("requires_human_approval"):
@@ -260,6 +320,7 @@ def build_supervisor_graph(
         g.add_node(name, make_specialist(name))
         g.add_edge(name, "supervisor")
     g.add_node("synthesize", synthesize)
+    g.add_node("recommend", recommend)
     g.add_node("approval_gate", approval_gate)
     g.add_edge(START, "supervisor")
     g.add_conditional_edges(
@@ -267,7 +328,8 @@ def build_supervisor_graph(
         lambda s: s["next"],
         {**{n: n for n in SPECIALIST_TOOLS}, "synthesize": "synthesize"},
     )
-    g.add_edge("synthesize", "approval_gate")
+    g.add_edge("synthesize", "recommend")
+    g.add_edge("recommend", "approval_gate")
     g.add_edge("approval_gate", END)
     return g.compile(checkpointer=checkpointer or MemorySaver())
 

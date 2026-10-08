@@ -103,3 +103,60 @@ async def test_supervisor_cannot_skip_all_specialists():
     await graph.ainvoke(STATE, cfg)
     state = await graph.aget_state(cfg)
     assert state.values["visited"] == ["documents"]
+
+
+def _with_planner(plan_text):
+    inner = FakeModel(["documents", "synthesize"], severity="medium")
+
+    async def model(messages, system):
+        if "maintenance planner" in system:
+            return ModelTurn(text=plan_text, stop_reason="end_turn")
+        return await inner(messages, system)
+
+    return model
+
+
+async def _diagnosis_after_planner(plan_text, thread):
+    graph = build_supervisor_graph(
+        _with_planner(plan_text), _run_tool, approval_threshold=0.0
+    )  # threshold 0: approval only when the unsafe filter forces it
+    cfg = {"configurable": {"thread_id": thread}}
+    await graph.ainvoke(STATE, cfg)
+    return (await graph.aget_state(cfg)).values["diagnosis"]
+
+
+async def test_planner_output_becomes_the_recommendation():
+    plan = json.dumps(
+        {
+            "recommended_action": "Lock out the motor, then inspect the bearings for play.",
+            "recommended_checks": ["Check alignment", "Measure vibration RMS"],
+            "urgency": "immediate",
+            "safety_notes": ["Verify de-energized before touching terminals"],
+        }
+    )
+    diag = await _diagnosis_after_planner(plan, "p-1")
+    assert diag["recommended_action"].startswith("[Urgency: immediate] Lock out the motor")
+    assert diag["recommended_checks"][0] == "Verify de-energized before touching terminals"
+    assert "Check alignment" in diag["recommended_checks"] and diag["urgency"] == "immediate"
+    assert diag["requires_human_approval"] is False and diag["unsafe_blocked"] == []
+
+
+async def test_unsafe_planner_advice_is_blocked_and_forces_approval():
+    plan = json.dumps(
+        {
+            "recommended_action": "Bypass the thermal protection and keep the motor running.",
+            "recommended_checks": ["Silence the alarm and continue", "Check bearing play"],
+            "urgency": "whenever",
+        }
+    )
+    diag = await _diagnosis_after_planner(plan, "p-2")
+    assert "withheld" in diag["recommended_action"] and "Bypass" not in diag["recommended_action"]
+    assert diag["recommended_checks"] == ["Check bearing play"]
+    assert diag["urgency"] == "soon"  # invalid urgency falls back
+    assert set(diag["unsafe_blocked"]) == {"bypass_safety_device", "ignore_alarm"}
+    assert diag["requires_human_approval"] is True
+
+
+async def test_unparsable_planner_output_keeps_the_synthesis_recommendation():
+    diag = await _diagnosis_after_planner("not json at all", "p-3")
+    assert diag["recommended_action"] == "Replace bearing."
