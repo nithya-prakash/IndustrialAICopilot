@@ -26,6 +26,7 @@ from app.agents.confidence import EvidenceSignals, calculate_confidence, normali
 from app.agents.confidence import requires_human_approval as compute_requires_approval
 from app.agents.diagnosis_agent import (
     DIAGNOSIS_SYSTEM_PROMPT,
+    JSON_RETRY_NUDGE,
     AgentError,
     _parse_diagnosis_json,
     _summarize_tool_output,
@@ -194,18 +195,29 @@ def build_supervisor_graph(
     async def synthesize(state: DiagnosisState) -> dict:
         evidence = state.get("evidence", [])
         digest = json.dumps(evidence, default=str)[:12000]
+        digest_message = (
+            f"{state['request_context']}\n\nGathered evidence:\n{digest}\n"
+            f"Valid citations: {json.dumps(state.get('citations', []))}"
+        )
         turn = await plain_call(
-            [
-                {
-                    "role": "user",
-                    "content": f"{state['request_context']}\n\nGathered evidence:\n{digest}\n"
-                    f"Valid citations: {json.dumps(state.get('citations', []))}",
-                }
-            ],
-            DIAGNOSIS_SYSTEM_PROMPT,
+            [{"role": "user", "content": digest_message}], DIAGNOSIS_SYSTEM_PROMPT
         )
         try:
-            parsed = _parse_diagnosis_json(turn.text)
+            try:
+                parsed = _parse_diagnosis_json(turn.text)
+            except AgentError as first_error:
+                try:
+                    retry = await plain_call(
+                        [
+                            {"role": "user", "content": digest_message},
+                            {"role": "assistant", "content": turn.text},
+                            {"role": "user", "content": JSON_RETRY_NUDGE},
+                        ],
+                        DIAGNOSIS_SYSTEM_PROMPT,
+                    )
+                    parsed = _parse_diagnosis_json(retry.text)
+                except Exception:  # noqa: BLE001
+                    raise first_error from None
         except AgentError as exc:
             return {
                 "diagnosis": {

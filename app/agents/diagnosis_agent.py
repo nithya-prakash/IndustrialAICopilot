@@ -83,6 +83,12 @@ respond with ONLY a JSON object, no other text, no markdown fences:
 "severity": "low|medium|high|critical", "limitations": ["..."]}"""
 
 
+JSON_RETRY_NUDGE = (
+    "Your previous reply was not valid JSON. Reply again with ONLY the complete, valid JSON "
+    "diagnosis object, with no other text and no markdown fences."
+)
+
+
 class AgentError(Exception):
     pass
 
@@ -420,7 +426,23 @@ async def _run_diagnosis(
                 )
             final_text = turn.text
 
-        parsed = _parse_diagnosis_json(final_text)
+        try:
+            parsed = _parse_diagnosis_json(final_text)
+        except AgentError as first_error:
+            # Some models emit almost-valid JSON. Ask once for a clean copy before giving up; if the
+            # retry itself fails for any reason, report the original problem.
+            try:
+                retry = await model_call(
+                    [
+                        *messages,
+                        {"role": "assistant", "content": final_text},
+                        {"role": "user", "content": JSON_RETRY_NUDGE},
+                    ],
+                    DIAGNOSIS_SYSTEM_PROMPT,
+                )
+                parsed = _parse_diagnosis_json(retry.text)
+            except Exception:  # noqa: BLE001
+                raise first_error from None
     except (LLMError, AgentError) as exc:
         return await _persist_failed_diagnosis(
             db,

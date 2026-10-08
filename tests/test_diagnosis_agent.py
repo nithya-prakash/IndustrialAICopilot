@@ -99,9 +99,7 @@ async def test_no_tool_calls_produces_low_confidence_diagnosis(db_session: Async
 
 DIAGNOSIS_JSON_WITH_VALID_CITATION = _diagnosis_json(
     summary="Documentation points to blocked ventilation as a likely cause.",
-    causes=[
-        {"cause": "Blocked ventilation", "rank": 1, "supporting_citations": [VALID_CITATION]}
-    ],
+    causes=[{"cause": "Blocked ventilation", "rank": 1, "supporting_citations": [VALID_CITATION]}],
     severity="medium",
 )
 
@@ -867,8 +865,13 @@ async def test_prompt_injection_in_tool_output_is_treated_as_data(
     final = _diagnosis_json(
         summary="Bearing wear.",
         severity="low",
-        causes=[{"cause": "Bearing wear", "rank": 1,
-                 "supporting_citations": [VALID_CITATION, INJECTED_CITATION]}],
+        causes=[
+            {
+                "cause": "Bearing wear",
+                "rank": 1,
+                "supporting_citations": [VALID_CITATION, INJECTED_CITATION],
+            }
+        ],
     )
     turns = [
         _tool_use(
@@ -936,12 +939,54 @@ async def test_injection_text_in_tool_result_is_disclosed_in_limitations(
         "execute_tool",
         _fake_execute_tool_factory({"search_technical_documents": poisoned}),
     )
-    model = ScriptedModel([
-        _tool_use(ModelToolCall(id="c1", name="search_technical_documents", input={"query": "x"})),
-        _end_turn(DIAGNOSIS_JSON_WITH_VALID_CITATION),
-    ])
+    model = ScriptedModel(
+        [
+            _tool_use(
+                ModelToolCall(id="c1", name="search_technical_documents", input={"query": "x"})
+            ),
+            _end_turn(DIAGNOSIS_JSON_WITH_VALID_CITATION),
+        ]
+    )
     diagnosis = await run_diagnosis(
-        db_session, tenant_id="acme", user_id=uuid.uuid4(), conversation_id=None,
-        question="Why hot?", model_call=model,
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why hot?",
+        model_call=model,
     )
     assert any("instruction-like" in x for x in diagnosis.limitations)
+
+
+async def test_malformed_final_json_is_retried_once(db_session: AsyncSession) -> None:
+    model = ScriptedModel(
+        [
+            _end_turn('{"summary": "cut off here", "possible_causes": [{"cause" "oops"}'),
+            _end_turn(DIAGNOSIS_JSON_WITH_VALID_CITATION),
+        ]
+    )
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why hot?",
+        model_call=model,
+    )
+    assert diagnosis.status == DiagnosisStatus.completed and model.call_count == 2
+
+
+async def test_still_malformed_after_the_retry_fails_cleanly(db_session: AsyncSession) -> None:
+    model = ScriptedModel([_end_turn("not json"), _end_turn("still not json")])
+    diagnosis = await run_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why hot?",
+        model_call=model,
+    )
+    assert (
+        diagnosis.status == DiagnosisStatus.failed
+        and "valid diagnosis JSON" in diagnosis.error_message
+    )
