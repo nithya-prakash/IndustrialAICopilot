@@ -26,7 +26,7 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 | Relevance cut-off, held-out check | -1.15: 4/5 answerable questions pass, 1/2 unanswerable blocked (balanced accuracy 0.65; perfect on the tuning questions) | 17 tuning / 7 held-out questions, retrieval scores only (`python -m evaluation.calibrate_cutoff`); far too small to be conclusive |
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
 | API latency under load | read endpoints: p50 10 ms, p95 23 ms, 0 failures in 1,284 requests (14.9 req/s offered); login p50 2.3 s | Locust, 20 users, 90 s, local Docker, rate limits raised |
-| AI endpoints, 2 concurrent users | 2 of 4 diagnoses completed; failures: 1 provider rate limit, 1 empty model answer (now retried) | Locust, Groq free tier; tiny sample, bounded by the provider |
+| AI endpoints under load (app overhead only) | 10 users: 0 failures in 210 requests (tool loop p50 1.1 s / p95 8.3 s, supervisor p50 3.2 s / p95 8.8 s, 2.4 req/s); with 20% of model calls rejected by 429: 0 failures in 191 requests, p95 6.6 s | Locust against a fake OpenAI-compatible server (`loadtest/fake_llm_server.py`, 400 ms per call), so a provider quota is not measured; real model latency is separate (7 to 31 s on Groq) |
 | Injection screens (116 attacks, 105 benign texts) | regex 50/116 caught (95% CI 35-52%), 4/105 false positives; llm-guard 93/116 (72-86%), 14/105 false positives (8-21%); both 101/116, 18/105 | synthetic template attacks (seed 7) vs. 44 real manual passages, 46 tricky and 15 German benign sentences, `python -m evaluation.injection_eval --llm-guard` |
 
 All sets are small and self-written: they check that the pipeline works and show relative differences, not general
@@ -118,6 +118,8 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
 
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
+- A real hosted model hit its free-tier daily token cap during testing (the app now honors Retry-After and reports
+  quota exhaustion plainly); the load numbers above deliberately use a fake model.
 - Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
 - Sensor findings are checked against the retrieved sensor data (metric and stated numbers) and dropped when they do not
   match; the model's other free text is not. A small local vision model gave shallow image observations.

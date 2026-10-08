@@ -55,7 +55,7 @@ class Reader(_Base):
 
 class Diagnostician(_Base):
     weight = int(os.environ.get("LOAD_AI_USERS", "0"))
-    wait_time = between(5, 15)
+    wait_time = between(*(float(x) for x in os.environ.get("LOAD_AI_WAIT", "5,15").split(",")))
 
     @task
     def ask(self):
