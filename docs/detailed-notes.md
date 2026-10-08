@@ -197,7 +197,8 @@ Register it in your MCP client's server configuration (the `mcpServers` format m
       "args": ["-m", "app.mcp_server.server"],
       "cwd": "/absolute/path/to/industrial-copilot",
       "env": {
-        "MCP_TENANT_ID": "acme",
+        "MCP_USERNAME": "mcp_service",
+        "MCP_PASSWORD": "<service account password>",
         "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost:5432/copilot"
       }
     }

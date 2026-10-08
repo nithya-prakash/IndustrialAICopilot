@@ -54,7 +54,8 @@ flowchart LR
   written to an append-only audit log, and all queries are tenant-scoped.
 - **Incident memory:** a tool retrieves earlier diagnoses that a supervisor approved, by meaning (same workspace only),
   and treats them as background; they never raise the confidence score.
-- **MCP server:** the same tools are available to any MCP client (`app/mcp_server/`).
+- **MCP server:** the same tools are available to any MCP client as an authenticated, audited, rate-limited service
+  account ([`docs/mcp.md`](docs/mcp.md)).
 - **Evaluation and observability:** RAGAS scores exported to Langfuse, Prometheus and Grafana for the API.
 
 ## Quickstart
