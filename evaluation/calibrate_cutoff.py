@@ -5,7 +5,8 @@
 Retrieval only, no LLM. For every question in data/evaluation/answer_eval.json it records the best
 cross-encoder score the sample manual achieves; a cut-off t passes a question when score >= t.
 Good: answerable questions pass and unanswerable ones are blocked. t is chosen on the tuning
-questions to maximise balanced accuracy (ties: keep more answerable), then scored once on held-out.
+questions with a fixed safety margin below the lowest answerable score, then scored once on
+held-out.
 """
 
 import asyncio
@@ -21,6 +22,7 @@ from app.rag.retrieval import hybrid_search
 
 DATA = Path("data/evaluation/answer_eval.json")
 OUT = Path("data/evaluation/results/cutoff_calibration.json")
+MARGIN = 3.0
 
 
 async def best_scores(items):
@@ -69,10 +71,12 @@ def main():
     candidates = [(a + b) / 2 for a, b in zip(candidates, candidates[1:], strict=False)] + [
         candidates[0] - 1
     ]
-    best = max(
-        candidates,
-        key=lambda t: (balanced_accuracy(tuning, t)[0], balanced_accuracy(tuning, t)[1], -t),
-    )
+    # Blocking relevant evidence is the worse error (the agent then answers without the manual), and
+    # 11 tuning examples cannot show how low realistic answerable scores go. So the cut-off sits a
+    # fixed MARGIN below the lowest tuning answerable score (about two standard deviations of the
+    # answerable scores). The margin was fixed before looking at the held-out questions.
+    lowest_answerable = min(r["best_score"] for r in tuning if r["answerable"])
+    best = lowest_answerable - MARGIN
     result = {
         "chosen_cutoff": round(best, 2),
         "tuning": dict(

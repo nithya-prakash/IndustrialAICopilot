@@ -105,12 +105,13 @@ class Settings(BaseSettings):
     rerank_top_k: int = 5
     # Cross-encoder logits are unbounded (not a [0,1] probability) and their range depends on the
     # model, so the right cut-off must be read off the score distribution of RERANK_MODEL.
-    # -1.15 was chosen on the 17 "tuning" questions of data/evaluation/answer_eval.json only
-    # (python -m evaluation.calibrate_cutoff) and then scored once on the 7 held-out questions:
-    # 4/5 answerable passed and 1/2 unanswerable were blocked (balanced accuracy 0.65; the earlier
-    # hand-picked -4.0 scored 0.5 there). Seven questions is a very small test, so treat it as a
-    # starting point and re-run the script when the reranker or the manuals change.
-    min_relevance_score: float = -1.15
+    # A conservative floor, NOT a validated threshold. Every answerable question in
+    # data/evaluation/answer_eval.json had a best passage scoring >= -3.6, so -4.0 avoids blocking
+    # relevant evidence; it blocks only clearly unrelated passages. Tuning on 17 questions and
+    # checking on 7 held-out ones (python -m evaluation.calibrate_cutoff) showed no cut-off
+    # separates answerable from unanswerable questions reliably with this reranker and corpus
+    # (balanced accuracy 0.4 to 0.65 on held-out), and a tighter cut-off blocked a realistic query.
+    min_relevance_score: float = -4.0
 
     confidence_approval_threshold: float = 0.75
     diagnosis_timeout_seconds: int = 5
