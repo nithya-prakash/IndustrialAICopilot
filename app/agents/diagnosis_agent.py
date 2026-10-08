@@ -9,6 +9,7 @@ validation against actually-gathered evidence, confidence/severity
 computation, persistence — is unit-testable by injecting a fake model
 function, without needing a real LLM call. See tests/test_diagnosis_agent.py.
 """
+
 import json
 import time
 import uuid
@@ -23,6 +24,7 @@ from app.guardrails import scan_obj
 from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
+from app.observability import tracing
 from app.observability.metrics import (
     agent_run_duration_seconds,
     agent_tool_call_duration_seconds,
@@ -361,7 +363,12 @@ async def _run_diagnosis(
             tool_results_content = []
             for call in turn.tool_calls:
                 tool_start = time.perf_counter()
-                result = await execute_tool(call.name, call.input, ctx)
+                with tracing.observation(f"tool:{call.name}", input=call.input) as tool_span:
+                    result = await execute_tool(call.name, call.input, ctx)
+                    tool_span.update(
+                        output=_summarize_tool_output(result),
+                        metadata={"citations": len(result.citations), "error": bool(result.error)},
+                    )
                 agent_tool_call_duration_seconds.labels(tool=call.name).observe(
                     time.perf_counter() - tool_start
                 )
@@ -527,7 +534,14 @@ async def _run_diagnosis(
 async def run_diagnosis(*args, **kwargs) -> Diagnosis:
     """Runs the tool-loop agent (see `_run_diagnosis`) and records its wall-clock duration."""
     start = time.perf_counter()
-    diagnosis = await _run_diagnosis(*args, **kwargs)
+    with tracing.observation(
+        "diagnosis", metadata={"orchestrator": "tool_loop", "tenant_id": kwargs.get("tenant_id")}
+    ) as root:
+        diagnosis = await _run_diagnosis(*args, **kwargs)
+        root.update(
+            output={"status": diagnosis.status.value, "confidence": diagnosis.confidence},
+            metadata={"diagnosis_id": str(diagnosis.id), "severity": diagnosis.severity.value},
+        )
     agent_run_duration_seconds.labels(
         orchestrator="tool_loop", status=diagnosis.status.value
     ).observe(time.perf_counter() - start)

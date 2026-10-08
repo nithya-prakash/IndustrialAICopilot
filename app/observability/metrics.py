@@ -14,6 +14,7 @@ processes) or a push gateway, both real added complexity for a phase whose
 main value is the request/LLM/agent path. Documented as a scope cut, not
 an oversight — see docs/architecture-decisions.md.
 """
+
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.config import get_settings
@@ -147,12 +148,10 @@ def record_llm_call(
     app/rag/generation.py (operation="agent") and app/vision/analyzer.py
     (operation="vision") so the label set and cost calculation live in one
     place instead of being reimplemented per call site."""
-    llm_calls_total.labels(
-        provider=provider, model=model, operation=operation, status=status
-    ).inc()
-    llm_call_duration_seconds.labels(
-        provider=provider, model=model, operation=operation
-    ).observe(duration_seconds)
+    llm_calls_total.labels(provider=provider, model=model, operation=operation, status=status).inc()
+    llm_call_duration_seconds.labels(provider=provider, model=model, operation=operation).observe(
+        duration_seconds
+    )
 
     if input_tokens:
         llm_tokens_total.labels(

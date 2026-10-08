@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     # "regex" (default) or "llm_guard" (adds llm-guard's PromptInjection classifier;
     # needs the optional package)
     injection_scanner: str = "regex"
+    # Reasoning effort for models that support it (e.g. gpt-oss on Groq). Empty = provider default,
+    # except gpt-oss models, which default to "low": their hidden reasoning can otherwise
+    # consume the whole output budget and leave an empty answer.
+    llm_reasoning_effort: str = ""
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 384

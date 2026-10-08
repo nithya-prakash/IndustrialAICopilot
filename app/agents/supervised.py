@@ -19,11 +19,13 @@ from app.agents.diagnosis_agent import (
     _build_initial_message,
     _get_or_create_conversation,
     _persist_failed_diagnosis,
+    _summarize_tool_output,
 )
 from app.agents.supervisor_graph import build_supervisor_graph
 from app.config import get_settings
 from app.models.conversation import Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
+from app.observability import tracing
 from app.observability.metrics import (
     agent_run_duration_seconds,
     agent_tool_call_duration_seconds,
@@ -42,7 +44,12 @@ _paused_threads: dict[uuid.UUID, str] = {}
 async def _instrumented_tool(name: str, tool_input: dict, ctx: ToolContext):
     """execute_tool plus the same per-tool metrics the tool-loop agent records."""
     start = time.perf_counter()
-    result = await execute_tool(name, tool_input, ctx)
+    with tracing.observation(f"tool:{name}", input=tool_input) as tool_span:
+        result = await execute_tool(name, tool_input, ctx)
+        tool_span.update(
+            output=_summarize_tool_output(result),
+            metadata={"citations": len(result.citations), "error": bool(result.error)},
+        )
     agent_tool_call_duration_seconds.labels(tool=name).observe(time.perf_counter() - start)
     agent_tool_calls_total.labels(tool=name, status="error" if result.error else "success").inc()
     return result
@@ -194,7 +201,14 @@ async def resume_if_paused(
 async def run_supervised_diagnosis(*args, **kwargs) -> Diagnosis:
     """Runs the supervisor graph (see `_run_supervised_diagnosis`) and records its duration."""
     start = time.perf_counter()
-    diagnosis = await _run_supervised_diagnosis(*args, **kwargs)
+    with tracing.observation(
+        "diagnosis", metadata={"orchestrator": "supervisor", "tenant_id": kwargs.get("tenant_id")}
+    ) as root:
+        diagnosis = await _run_supervised_diagnosis(*args, **kwargs)
+        root.update(
+            output={"status": diagnosis.status.value, "confidence": diagnosis.confidence},
+            metadata={"diagnosis_id": str(diagnosis.id), "severity": diagnosis.severity.value},
+        )
     agent_run_duration_seconds.labels(
         orchestrator="supervisor", status=diagnosis.status.value
     ).observe(time.perf_counter() - start)

@@ -339,3 +339,18 @@ def test_provider_specific_key_wins_over_llm_api_key(monkeypatch):
     assert s.resolved_llm_api_key == "groq-key"
     monkeypatch.setattr(s, "llm_provider", "openai")
     assert s.resolved_llm_api_key == "generic"
+
+
+def test_gpt_oss_defaults_to_low_reasoning_effort_and_can_be_overridden(monkeypatch):
+    from app.config import get_settings
+    from app.rag.generation import _reasoning_kwargs
+
+    s = get_settings()
+    monkeypatch.setattr(s, "llm_reasoning_effort", "")
+    monkeypatch.setattr(s, "llm_model", "openai/gpt-oss-120b")
+    assert _reasoning_kwargs(s) == {"reasoning_effort": "low"}
+    monkeypatch.setattr(s, "llm_reasoning_effort", "high")
+    assert _reasoning_kwargs(s) == {"reasoning_effort": "high"}
+    monkeypatch.setattr(s, "llm_reasoning_effort", "")
+    monkeypatch.setattr(s, "llm_model", "llama3.2:3b")
+    assert _reasoning_kwargs(s) == {}

@@ -17,6 +17,7 @@ clamped to the known enum and has one deterministic escalation floor: any
 severity claim below what the objective sensor evidence supports is not
 honored — see requires_human_approval and normalize_severity.
 """
+
 from dataclasses import dataclass
 
 BASE_CONFIDENCE = 0.5

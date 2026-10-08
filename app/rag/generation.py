@@ -22,6 +22,7 @@ into the same provider-agnostic `ModelTurn`/`ModelToolCall` the loop
 already consumes. This keeps the translation confined to one function
 instead of making the loop itself provider-aware.
 """
+
 import json
 import time
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from dataclasses import dataclass, field
 from app.config import OPENAI_COMPATIBLE_BASE_URLS, get_settings
 from app.core.retry import call_with_retry, is_transient_llm_error
 from app.llm.client import LLMError
+from app.observability import tracing
 from app.observability.metrics import record_llm_call
 from app.tools.definitions import TOOL_DEFINITIONS
 
@@ -45,6 +47,8 @@ class ModelTurn:
     stop_reason: str  # "tool_use" | "end_turn" | anything else counts as end_turn
     text: str = ""
     tool_calls: list[ModelToolCall] = field(default_factory=list)
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 async def _call_anthropic(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
@@ -96,7 +100,13 @@ async def _call_anthropic(messages: list[dict], system: str, use_tools: bool = T
         for block in response.content
         if block.type == "tool_use"
     ]
-    return ModelTurn(stop_reason=response.stop_reason, text=text, tool_calls=tool_calls)
+    return ModelTurn(
+        stop_reason=response.stop_reason,
+        text=text,
+        tool_calls=tool_calls,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+    )
 
 
 def _openai_tool_definitions() -> list[dict]:
@@ -171,6 +181,11 @@ _FINAL_ANSWER_NUDGE = (
 )
 
 
+def _reasoning_kwargs(settings) -> dict:
+    effort = settings.llm_reasoning_effort or ("low" if "gpt-oss" in settings.llm_model else "")
+    return {"reasoning_effort": effort} if effort else {}
+
+
 async def _call_openai(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
     settings = get_settings()
     if not settings.resolved_llm_api_key and not settings.resolved_llm_base_url:
@@ -187,6 +202,7 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
     )
     openai_messages = _anthropic_messages_to_openai(messages, system)
     start = time.perf_counter()
+
     async def create(msgs: list[dict], with_tools: bool):
         return await call_with_retry(
             "llm_agent",
@@ -195,6 +211,7 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
             model=settings.llm_model,
             max_tokens=2048,
             messages=msgs,
+            **_reasoning_kwargs(settings),
             **({"tools": _openai_tool_definitions()} if with_tools else {}),
         )
 
@@ -244,13 +261,40 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
         # LLMError so the agent stores a failed diagnosis instead of a 500.
         raise LLMError(f"Model returned malformed tool-call arguments: {exc}") from exc
     stop_reason = "tool_use" if tool_calls else "end_turn"
-    return ModelTurn(stop_reason=stop_reason, text=choice.content or "", tool_calls=tool_calls)
+    return ModelTurn(
+        stop_reason=stop_reason,
+        text=choice.content or "",
+        tool_calls=tool_calls,
+        input_tokens=usage.prompt_tokens if usage else 0,
+        output_tokens=usage.completion_tokens if usage else 0,
+    )
 
 
-async def call_model(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
+async def _dispatch(messages: list[dict], system: str, use_tools: bool) -> ModelTurn:
     settings = get_settings()
     if settings.llm_provider == "anthropic":
         return await _call_anthropic(messages, system, use_tools)
     if settings.llm_provider in ("openai", *OPENAI_COMPATIBLE_BASE_URLS):
         return await _call_openai(messages, system, use_tools)
     raise LLMError(f"Unsupported LLM_PROVIDER for agent tool-calling: {settings.llm_provider!r}")
+
+
+async def call_model(messages: list[dict], system: str, use_tools: bool = True) -> ModelTurn:
+    settings = get_settings()
+    with tracing.observation(
+        "llm-call",
+        as_type="generation",
+        model=settings.llm_model,
+        input={"system": system, "messages": messages},
+    ) as generation:
+        turn = await _dispatch(messages, system, use_tools)
+        generation.update(
+            output=turn.text or [call.name for call in turn.tool_calls],
+            usage_details={"input": turn.input_tokens, "output": turn.output_tokens},
+            metadata={
+                "provider": settings.llm_provider,
+                "use_tools": use_tools,
+                "tool_calls": [call.name for call in turn.tool_calls],
+            },
+        )
+    return turn
