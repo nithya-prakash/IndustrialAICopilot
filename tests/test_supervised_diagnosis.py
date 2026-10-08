@@ -11,6 +11,19 @@ from app.tools.executor import ToolExecutionResult  # noqa: E402
 from tests.test_supervisor_graph import CITE, FakeModel  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def memory_checkpointer(monkeypatch):
+    """Tests run on SQLite, so use an in-memory checkpointer shared across calls in a test."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    saver = MemorySaver()
+
+    async def get():
+        return saver
+
+    monkeypatch.setattr(supervised, "get_checkpointer", get)
+
+
 async def test_supervised_diagnosis_persists_and_resumes(db_session: AsyncSession, monkeypatch):
     async def fake_execute(name, tool_input, ctx):
         return ToolExecutionResult(
@@ -31,14 +44,44 @@ async def test_supervised_diagnosis_persists_and_resumes(db_session: AsyncSessio
     assert diagnosis.status == DiagnosisStatus.completed
     assert diagnosis.requires_human_approval is True
     assert diagnosis.possible_causes[0]["supporting_citations"] == [CITE]
-    assert diagnosis.id in supervised._paused_threads
 
     monkeypatch.setattr(supervised, "call_model", FakeModel([]))
     resumed = await supervised.resume_if_paused(
         db_session, tenant_id="acme", diagnosis_id=diagnosis.id, decision="approved", reviewer="u"
     )
     assert resumed is True
-    assert diagnosis.id not in supervised._paused_threads
+    # Already resumed, and a diagnosis that never paused, both report False.
+    again = await supervised.resume_if_paused(
+        db_session, tenant_id="acme", diagnosis_id=diagnosis.id, decision="approved", reviewer="u"
+    )
+    unknown = await supervised.resume_if_paused(
+        db_session, tenant_id="acme", diagnosis_id=uuid.uuid4(), decision="approved", reviewer="u"
+    )
+    assert again is False and unknown is False
+
+
+async def test_paused_approval_survives_a_new_graph_instance(db_session: AsyncSession, monkeypatch):
+    """The thread id is the diagnosis id and state lives in the checkpointer, so a fresh process
+    (a new graph object over the same store) can resume a pause it never created."""
+
+    async def fake_execute(name, tool_input, ctx):
+        return ToolExecutionResult(
+            output={}, citations=[CITE], evidence=[{"type": "document_chunk", "citation": CITE}]
+        )
+
+    monkeypatch.setattr(supervised, "execute_tool", fake_execute)
+    monkeypatch.setattr(supervised.get_settings(), "confidence_approval_threshold", 0.99)
+    diagnosis = await supervised.run_supervised_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why hot?",
+        model_call=FakeModel(["documents", "synthesize"]),
+    )
+    graph = supervised._graph(db_session, "acme", None, await supervised.get_checkpointer())
+    state = await graph.aget_state({"configurable": {"thread_id": str(diagnosis.id)}})
+    assert state.next == ("approval_gate",)
 
 
 async def test_supervisor_path_emits_run_tool_specialist_and_diagnosis_metrics(

@@ -86,7 +86,8 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
 - Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
   incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each
   call, which suits hundreds of incidents, not a large history.
-- Paused approvals use in-memory graph checkpoints, so a restart drops the pause (the database record remains).
+- Paused approvals are checkpointed in Postgres (verified: pause, restart the backend, resume from a new process).
+  Only the graph's checkpoint format is tied to the installed LangGraph version.
 - No permanent hosted instance: Hugging Face now charges for Docker Spaces, so the demo is a single container shared on
   demand through a tunnel (`deploy/`).
 
