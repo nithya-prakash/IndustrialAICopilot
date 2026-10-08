@@ -27,7 +27,7 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
 | API latency under load | read endpoints: p50 10 ms, p95 23 ms, 0 failures in 1,284 requests (14.9 req/s offered); login p50 2.3 s | Locust, 20 users, 90 s, local Docker, rate limits raised |
 | AI endpoints, 2 concurrent users | 2 of 4 diagnoses completed; failures: 1 provider rate limit, 1 empty model answer (now retried) | Locust, Groq free tier; tiny sample, bounded by the provider |
-| Injection screen, attacks caught | regex 8/20, llm-guard 15/20, both 18/20 | 20 synthetic attacks; false positives 4/22, 2/22, 6/22 on 22 benign texts |
+| Injection screens (116 attacks, 105 benign texts) | regex 50/116 caught (95% CI 35-52%), 4/105 false positives; llm-guard 93/116 (72-86%), 14/105 false positives (8-21%); both 101/116, 18/105 | synthetic template attacks (seed 7) vs. 44 real manual passages, 46 tricky and 15 German benign sentences, `python -m evaluation.injection_eval --llm-guard` |
 
 All sets are small and self-written: they check that the pipeline works and show relative differences, not general
 accuracy. Reproduce with the scripts in `evaluation/` and `loadtest/`.
@@ -88,7 +88,9 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
 ## Security and guardrails
 
 - **Injection:** retrieved text is screened (regex, optionally llm-guard) and flagged in the diagnosis; tool output is
-  treated as data. Measured on 20 synthetic attacks: regex 8/20, llm-guard 15/20 (see Key results).
+  treated as data. llm-guard catches far more (80% vs 43%) but flags 8 of 15 German benign sentences (none of the 44 real
+  manual passages). Both barely detect citation-forging and confidence-manipulation attacks, which is why those are
+  handled structurally: citations are checked against retrieved evidence and confidence is computed outside the model.
 - **Tool inputs:** every tool call is validated centrally (required and unknown keys, types, lengths, UUIDs, ISO times).
 - **Evidence:** citations are checked against what was retrieved, passages below a calibrated relevance score are dropped,
   and confidence is computed outside the model.
@@ -116,7 +118,7 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
 
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
-- Evaluation sets are tiny (24 to 53 questions, 20 attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
+- Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
 - Free-text sensor findings are not validated, and a small local vision model gave shallow image observations.
 - Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
   incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each
