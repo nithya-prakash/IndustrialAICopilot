@@ -118,6 +118,8 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
 
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
+- CI fails if the injection screen or BM25 retrieval regress (`tests/test_eval_regression.py`); the LLM-based
+  evaluations and dense/hybrid retrieval are run by hand because they need a provider or the vector store.
 - A real hosted model hit its free-tier daily token cap during testing (the app now honors Retry-After and reports
   quota exhaustion plainly); the load numbers above deliberately use a fake model.
 - Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off generalizes only modestly to held-out questions (7 of them),, and a 7B model judged a 7B model in the RAGAS run.
