@@ -115,7 +115,12 @@ async def _ensure_manual_indexed(db, owner: User, path: Path) -> None:
 
 async def _ensure_sample_manual_indexed(db, owner: User) -> None:
     """Indexes the sample motor manual and every synthetic evaluation manual (first run only)."""
-    for path in [MANUAL_PATH, *sorted((_DATA_DIR / "manuals" / "eval").glob("*.pdf"))]:
+    eval_dir = _DATA_DIR / "manuals" / "eval"
+    if not any(eval_dir.glob("*.pdf")):  # PDFs are not tracked in git: regenerate on a fresh clone
+        from scripts.generate_eval_manuals import main as generate_eval_manuals
+
+        generate_eval_manuals()
+    for path in [MANUAL_PATH, *sorted(eval_dir.glob("*.pdf"))]:
         await _ensure_manual_indexed(db, owner, path)
 
 
