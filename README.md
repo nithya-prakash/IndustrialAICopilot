@@ -102,8 +102,9 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
 - **A supervisor with specialists** (documents, sensors, vision, history, maintenance planner) keeps each step's tools
   and prompt small, and every step observable. The older single tool-loop agent is kept: it is faster and simpler for
   easy questions.
-- **Hybrid retrieval plus a cross-encoder** because manuals mix exact terms (part names, limits) with paraphrased
-  symptoms; each method alone missed some of the labelled questions.
+- **Hybrid retrieval plus a cross-encoder** as a design choice for manuals that mix exact terms (part names, limits)
+  with paraphrased symptoms. The measured evidence does not yet support it: on the 7-question set, dense-only scored
+  the best MRR (0.929 vs 0.886 for hybrid + rerank), with only 7 chunks in the corpus. A larger corpus is needed to test it.
 - **Approval as a graph `interrupt()` stored in Postgres** so a pending decision survives restarts and the model
   never acts on its own output.
 - **Everything behind one provider switch** (`LLM_PROVIDER`), so the same evaluation runs on a hosted or local model.
