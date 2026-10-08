@@ -31,7 +31,11 @@ from app.agents.diagnosis_agent import (
     _summarize_tool_output,
     _validate_causes,
 )
-from app.observability.metrics import agent_specialist_duration_seconds
+from app.guardrails import sanitize_recommendations
+from app.observability.metrics import (
+    agent_specialist_duration_seconds,
+    unsafe_actions_blocked_total,
+)
 
 SPECIALIST_TOOLS: dict[str, set[str]] = {
     "documents": {"search_technical_documents", "get_manual_section"},
@@ -211,16 +215,23 @@ def build_supervisor_graph(
             )
         )
         severity = normalize_severity(parsed.get("severity"))
+        action, _checks, unsafe_blocked = sanitize_recommendations(
+            str(parsed.get("recommended_action") or ""), []
+        )
+        for category in unsafe_blocked:
+            unsafe_actions_blocked_total.labels(category=category).inc()
         return {
             "diagnosis": {
                 "status": "completed",
                 "summary": str(parsed.get("summary", "")),
                 "possible_causes": causes,
-                "recommended_action": str(parsed.get("recommended_action") or ""),
+                "recommended_action": action,
+                "unsafe_blocked": unsafe_blocked,
                 "severity": severity,
                 "confidence": confidence,
                 "dropped_citations": dropped,
-                "requires_human_approval": compute_requires_approval(
+                "requires_human_approval": bool(unsafe_blocked)
+                or compute_requires_approval(
                     confidence=confidence,
                     severity=severity,
                     approval_threshold=approval_threshold,

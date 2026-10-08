@@ -1,0 +1,227 @@
+{
+  "manual": "electric_motor_manual.pdf",
+  "note": "Reference facts are taken from the sample manual's own text; unanswerable questions ask for things the manual does not contain.",
+  "items": [
+    {
+      "question": "What should I check first if motor vibration increases?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Excessive vibration",
+      "required_facts": [
+        [
+          "alignment"
+        ]
+      ]
+    },
+    {
+      "question": "At what vibration level should I investigate further?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Excessive vibration",
+      "required_facts": [
+        [
+          "4.5"
+        ]
+      ]
+    },
+    {
+      "question": "What are the common causes of excessive vibration?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Excessive vibration",
+      "required_facts": [
+        [
+          "misalignment",
+          "alignment"
+        ],
+        [
+          "bearing"
+        ]
+      ]
+    },
+    {
+      "question": "What typically causes motor overheating?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Overheating",
+      "required_facts": [
+        [
+          "overload"
+        ],
+        [
+          "ventilation"
+        ]
+      ]
+    },
+    {
+      "question": "How much above ambient should a winding temperature be before I schedule an inspection?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Overheating",
+      "required_facts": [
+        [
+          "40"
+        ]
+      ]
+    },
+    {
+      "question": "Which parts should I clean when the motor runs hot?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Overheating",
+      "required_facts": [
+        [
+          "fins"
+        ],
+        [
+          "shroud"
+        ]
+      ]
+    },
+    {
+      "question": "What does a grinding or rumbling noise usually mean?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Unusual noise",
+      "required_facts": [
+        [
+          "bearing"
+        ]
+      ]
+    },
+    {
+      "question": "What can a high-pitched whine from the motor indicate?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Unusual noise",
+      "required_facts": [
+        [
+          "voltage",
+          "frequency"
+        ]
+      ]
+    },
+    {
+      "question": "What does a rhythmic knocking that varies with shaft speed suggest?",
+      "answerable": true,
+      "expected_source": "Troubleshooting > Unusual noise",
+      "required_facts": [
+        [
+          "bent shaft",
+          "shaft"
+        ],
+        [
+          "rotor"
+        ]
+      ]
+    },
+    {
+      "question": "Should bearings be replaced individually or in pairs?",
+      "answerable": true,
+      "expected_source": "Maintenance > Bearings",
+      "required_facts": [
+        [
+          "pair"
+        ]
+      ]
+    },
+    {
+      "question": "When should sealed bearings be re-greased?",
+      "answerable": true,
+      "expected_source": "Maintenance > Lubrication",
+      "required_facts": [
+        [
+          "re-lubrication",
+          "relubrication",
+          "re-lubricat"
+        ]
+      ]
+    },
+    {
+      "question": "Can different greases be mixed?",
+      "answerable": true,
+      "expected_source": "Maintenance > Lubrication",
+      "required_facts": [
+        [
+          "break down",
+          "incompatible"
+        ],
+        [
+          "nameplate"
+        ]
+      ]
+    },
+    {
+      "question": "What must I do before any inspection or maintenance on the motor?",
+      "answerable": true,
+      "expected_source": "Safety",
+      "required_facts": [
+        [
+          "lock out",
+          "lockout"
+        ],
+        [
+          "de-energized",
+          "de-energised"
+        ]
+      ]
+    },
+    {
+      "question": "How hot can the motor housing get during normal operation?",
+      "answerable": true,
+      "expected_source": "Safety",
+      "required_facts": [
+        [
+          "70"
+        ]
+      ]
+    },
+    {
+      "question": "How should the motor be mounted to reduce vibration transfer?",
+      "answerable": true,
+      "expected_source": "Installation",
+      "required_facts": [
+        [
+          "rigid"
+        ],
+        [
+          "level"
+        ]
+      ]
+    },
+    {
+      "question": "What should be done with the foot-mounting bolts at installation?",
+      "answerable": true,
+      "expected_source": "Installation",
+      "required_facts": [
+        [
+          "torque"
+        ]
+      ]
+    },
+    {
+      "question": "What is the warranty period for this motor?",
+      "answerable": false
+    },
+    {
+      "question": "How do I rewire the motor from star to delta?",
+      "answerable": false
+    },
+    {
+      "question": "What is the replacement bearing part number for a 132 frame?",
+      "answerable": false
+    },
+    {
+      "question": "What is the insulation class of this motor?",
+      "answerable": false
+    },
+    {
+      "question": "What is the maximum rated ambient temperature?",
+      "answerable": false
+    },
+    {
+      "question": "How do I program the variable frequency drive for this motor?",
+      "answerable": false
+    },
+    {
+      "question": "What is the noise level of this motor in decibels?",
+      "answerable": false
+    },
+    {
+      "question": "How much does a replacement rotor cost?",
+      "answerable": false
+    }
+  ]
+}

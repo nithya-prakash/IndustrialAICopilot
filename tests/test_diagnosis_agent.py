@@ -729,7 +729,7 @@ async def test_malformed_tool_arguments_at_loop_level_real_executor(
 
     assert diagnosis.status == DiagnosisStatus.completed
     assert diagnosis.tool_calls[0]["tool"] == "get_manual_section"
-    assert "Invalid document_id" in diagnosis.tool_calls[0]["summary"]
+    assert "document_id must be a UUID" in diagnosis.tool_calls[0]["summary"]
 
 
 async def test_tool_exception_at_loop_level_does_not_crash_the_agent(

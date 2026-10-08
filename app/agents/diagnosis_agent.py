@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.confidence import EvidenceSignals, calculate_confidence, normalize_severity
 from app.agents.confidence import requires_human_approval as compute_requires_approval
 from app.config import get_settings
-from app.guardrails import scan_obj
+from app.guardrails import sanitize_recommendations, scan_obj
 from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
@@ -31,6 +31,7 @@ from app.observability.metrics import (
     agent_tool_calls_total,
     diagnoses_total,
     diagnosis_confidence,
+    unsafe_actions_blocked_total,
 )
 from app.rag.generation import call_model
 from app.services.audit_service import log_event
@@ -474,6 +475,18 @@ async def _run_diagnosis(
     recommended_checks = [
         str(c) for c in parsed.get("recommended_checks", []) if isinstance(c, str)
     ]
+    recommended_action, recommended_checks, unsafe_blocked = sanitize_recommendations(
+        str(parsed.get("recommended_action") or ""), recommended_checks
+    )
+    if unsafe_blocked:
+        limitations.append(
+            "Part of the model's advice conflicted with basic safety rules ("
+            + ", ".join(unsafe_blocked)
+            + ") and was withheld; a supervisor must review this diagnosis."
+        )
+        approval_required = True
+        for category in unsafe_blocked:
+            unsafe_actions_blocked_total.labels(category=category).inc()
 
     diagnosis = Diagnosis(
         tenant_id=tenant_id,
@@ -488,7 +501,7 @@ async def _run_diagnosis(
         sensor_findings=parsed.get("sensor_findings") or [],
         possible_causes=causes,
         recommended_checks=recommended_checks,
-        recommended_action=str(parsed.get("recommended_action") or ""),
+        recommended_action=recommended_action,
         confidence=confidence,
         severity=severity,
         requires_human_approval=approval_required,
@@ -524,6 +537,7 @@ async def _run_diagnosis(
             "confidence": confidence,
             "severity": severity_str,
             "requires_human_approval": approval_required,
+            "unsafe_actions_blocked": unsafe_blocked,
         },
     )
     await db.commit()

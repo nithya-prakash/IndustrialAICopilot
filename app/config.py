@@ -101,10 +101,13 @@ class Settings(BaseSettings):
     bm25_top_k: int = 20
     rrf_k: int = 60
     rerank_top_k: int = 5
-    # Cross-encoder logits are unbounded (not a [0,1] probability) and their
-    # range depends on the model, so this defaults low enough to be a no-op.
-    # Tune based on the observed score distribution for RERANK_MODEL.
-    min_relevance_score: float = -100.0
+    # Cross-encoder logits are unbounded (not a [0,1] probability) and their range depends on the
+    # model, so the right cut-off must be read off the score distribution of RERANK_MODEL.
+    # -4.0 comes from the 24-question set in data/evaluation/answer_eval.json with the default
+    # ms-marco-MiniLM-L-6-v2: best passages for all answerable questions scored >= -3.6, while 4 of
+    # 8 questions the manual cannot answer scored below -4.7. It was set on that same small set,
+    # so treat it as a starting point; re-check it if you change the reranker or the manuals.
+    min_relevance_score: float = -4.0
 
     confidence_approval_threshold: float = 0.75
     diagnosis_timeout_seconds: int = 5

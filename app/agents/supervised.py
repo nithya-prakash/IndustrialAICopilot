@@ -144,6 +144,15 @@ async def _run_supervised_diagnosis(
             ]
             if result["dropped_citations"]
             else []
+        )
+        + (
+            [
+                "Part of the model's advice conflicted with basic safety rules ("
+                + ", ".join(result["unsafe_blocked"])
+                + ") and was withheld; a supervisor must review this diagnosis."
+            ]
+            if result.get("unsafe_blocked")
+            else []
         ),
         llm_provider=settings.llm_provider,
         llm_model=settings.llm_model,

@@ -86,6 +86,16 @@ diagnosis_confidence = Histogram(
     "Confidence score of completed diagnoses",
     buckets=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0),
 )
+tool_input_rejections_total = Counter(
+    "tool_input_rejections_total",
+    "Tool calls rejected by argument validation before execution",
+    ["tool"],
+)
+unsafe_actions_blocked_total = Counter(
+    "unsafe_actions_blocked_total",
+    "Recommended actions or checks withheld by the unsafe-action filter",
+    ["category"],
+)
 agent_run_duration_seconds = Histogram(
     "agent_run_duration_seconds",
     "Wall-clock duration of one complete diagnosis run",

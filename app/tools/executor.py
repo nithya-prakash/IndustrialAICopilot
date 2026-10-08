@@ -25,7 +25,7 @@ from app.analytics.sensors import (
     statistical_summary,
 )
 from app.models.diagnosis import Diagnosis
-from app.observability.metrics import retrieval_duration_seconds
+from app.observability.metrics import retrieval_duration_seconds, tool_input_rejections_total
 from app.rag.retrieval import get_manual_section as fetch_manual_section
 from app.rag.retrieval import hybrid_search
 from app.services.equipment_service import (
@@ -36,6 +36,7 @@ from app.services.incident_memory import search_past_incidents
 from app.services.report_service import format_diagnostic_report
 from app.services.sensor_service import query_sensor_history as fetch_sensor_history
 from app.tools.calculator import CalculationError, safe_calculate
+from app.tools.validation import validate_tool_input
 
 
 @dataclass
@@ -66,6 +67,10 @@ async def execute_tool(name: str, tool_input: dict, ctx: ToolContext) -> ToolExe
     handler = handlers.get(name)
     if handler is None:
         return ToolExecutionResult(output={}, error=f"Unknown tool: {name}")
+    invalid = validate_tool_input(name, tool_input)
+    if invalid:
+        tool_input_rejections_total.labels(tool=name).inc()
+        return ToolExecutionResult(output={}, error=f"Invalid tool input: {invalid}")
 
     try:
         return await handler(tool_input, ctx)
