@@ -8,7 +8,9 @@ Diagnosis assistant for manufacturing maintenance teams: a technician asks about
 photo and sensor readings, and gets a diagnosis with citations to the equipment manual. Low-confidence or
 high-severity results are held for a supervisor to approve.
 
-![Demo: a 20% confidence diagnosis is held for review with its invented citations discarded, a supervisor rejects it with a comment, and a 69% diagnosis with real manual citations is shown as approved](docs/images/supervisor-demo.gif)
+![Demo: a technician describes an overheating motor, the agent returns a diagnosis with every cause cited to the manual and a computed confidence, and a supervisor approves it in the approval queue](docs/images/diagnosis-demo.gif)
+
+*Recorded against the local stack with a real model (Groq `gpt-oss-20b`); the [older recording](docs/images/supervisor-demo.gif) shows a low-confidence result being held and rejected.*
 
 ## Why
 
