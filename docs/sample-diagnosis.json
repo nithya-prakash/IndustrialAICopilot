@@ -1,0 +1,62 @@
+{
+  "question": "The motor housing feels very hot. What could be wrong?",
+  "equipment_id": "MOTOR-001",
+  "status": "completed",
+  "severity": "medium",
+  "confidence": 0.67,
+  "requires_human_approval": true,
+  "summary": "The motor housing is unusually hot, indicating a possible overheating condition.",
+  "possible_causes": [
+    {
+      "rank": 1,
+      "cause": "Sustained overload causing excessive current draw",
+      "supporting_citations": [
+        "[electric_motor_manual.pdf, Troubleshooting > Overheating, p.1]"
+      ]
+    },
+    {
+      "rank": 2,
+      "cause": "Blocked ventilation passages or accumulated dust reducing cooling",
+      "supporting_citations": [
+        "[electric_motor_manual.pdf, Troubleshooting > Overheating, p.1]"
+      ]
+    },
+    {
+      "rank": 3,
+      "cause": "Low supply voltage leading to higher current and heat",
+      "supporting_citations": [
+        "[electric_motor_manual.pdf, Troubleshooting > Overheating, p.1]"
+      ]
+    },
+    {
+      "rank": 4,
+      "cause": "Bearing failure increasing friction and heat",
+      "supporting_citations": [
+        "[electric_motor_manual.pdf, Troubleshooting > Overheating, p.1]",
+        "[electric_motor_manual.pdf, Maintenance > Bearings, p.2]"
+      ]
+    }
+  ],
+  "recommended_action": "After lock‑out/tag‑out per safety guidelines, verify voltage and current, clear any ventilation blockages, and if bearings are hot or noisy, plan for bearing inspection/replacement.",
+  "recommended_checks": null,
+  "limitations": [],
+  "evidence": [
+    {
+      "type": "document_chunk",
+      "detail": "Disconnect and lock out electrical power before performing any inspection or maintenance on the motor. Verify the circuit is de-energized with a calibrated meter before touching any terminal. Allow the motor housing to cool before handling; surface temperatures can exceed 70C during normal operation. Do not operate the motor with guards or covers removed.",
+      "citation": "[electric_motor_manual.pdf, Safety, p.1]"
+    },
+    {
+      "type": "document_chunk",
+      "detail": "Overheating is typically caused by sustained overload, blocked ventilation passages, low supply voltage, or a failing bearing increasing friction. Confirm the load current does not exceed the nameplate full-load amperage. Clear any dust or debris from the cooling fins and fan shroud. A winding temperature more than 40C above ambient during normal load is a signal to schedule inspection before the insulation degrades further.",
+      "citation": "[electric_motor_manual.pdf, Troubleshooting > Overheating, p.1]"
+    },
+    {
+      "type": "document_chunk",
+      "detail": "A grinding or rumbling noise usually points to bearing damage or contamination inside the bearing race. A high-pitched whine can indicate the motor is running at the wrong voltage or frequency. A rhythmic knocking that varies with shaft speed is often a bent shaft or a loose rotor component. Isolate the noise source before disassembly by listening near each bearing housing independently.",
+      "citation": "[electric_motor_manual.pdf, Troubleshooting > Unusual noise, p.1]"
+    }
+  ],
+  "llm_provider": "groq",
+  "llm_model": "openai/gpt-oss-120b"
+}

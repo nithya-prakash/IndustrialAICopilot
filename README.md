@@ -77,6 +77,31 @@ tunnel and prints a public URL. It works only while your machine and Docker are 
 FastAPI, LangGraph, SQLAlchemy, PostgreSQL, Qdrant, Celery, Redis, sentence-transformers, React, TypeScript,
 RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, GitHub Actions, pytest.
 
+## Security and guardrails
+
+- **Injection:** retrieved text is screened (regex, optionally llm-guard) and flagged in the diagnosis; tool output is
+  treated as data. Measured on 20 synthetic attacks: regex 8/20, llm-guard 15/20 (see Key results).
+- **Tool inputs:** every tool call is validated centrally (required and unknown keys, types, lengths, UUIDs, ISO times).
+- **Evidence:** citations are checked against what was retrieved, passages below a calibrated relevance score are dropped,
+  and confidence is computed outside the model.
+- **Unsafe actions:** recommendations that bypass safety devices, skip lockout, exceed ratings or ignore alarms are
+  replaced with a safe fallback and force supervisor approval (rule-based; it cannot judge advice in general).
+- **Access:** tenant-scoped queries, role-gated approval where nobody approves their own diagnosis, append-only audit
+  log, and an authenticated, rate-limited MCP service account ([`docs/mcp.md`](docs/mcp.md)).
+
+## Why this architecture
+
+- **A supervisor with specialists** (documents, sensors, vision, history, maintenance planner) keeps each step's tools
+  and prompt small, and every step observable. The older single tool-loop agent is kept: it is faster and simpler for
+  easy questions.
+- **Hybrid retrieval plus a cross-encoder** because manuals mix exact terms (part names, limits) with paraphrased
+  symptoms; each method alone missed some of the labelled questions.
+- **Approval as a graph `interrupt()` stored in Postgres** so a pending decision survives restarts and the model
+  never acts on its own output.
+- **Everything behind one provider switch** (`LLM_PROVIDER`), so the same evaluation runs on a hosted or local model.
+
+Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.md).
+
 ## Limitations
 
 - The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
