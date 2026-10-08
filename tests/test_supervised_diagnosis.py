@@ -18,7 +18,7 @@ def memory_checkpointer(monkeypatch):
 
     saver = MemorySaver()
 
-    async def get():
+    async def get(db=None):
         return saver
 
     monkeypatch.setattr(supervised, "get_checkpointer", get)
@@ -79,7 +79,9 @@ async def test_paused_approval_survives_a_new_graph_instance(db_session: AsyncSe
         question="Why hot?",
         model_call=FakeModel(["documents", "synthesize"]),
     )
-    graph = supervised._graph(db_session, "acme", None, await supervised.get_checkpointer())
+    graph = supervised._graph(
+        db_session, "acme", None, await supervised.get_checkpointer(db_session)
+    )
     state = await graph.aget_state({"configurable": {"thread_id": str(diagnosis.id)}})
     assert state.next == ("approval_gate",)
 
@@ -113,3 +115,21 @@ async def test_supervisor_path_emits_run_tool_specialist_and_diagnosis_metrics(
     assert tool._value.get() == before[0] + 1
     assert runs._sum.get() > before[1] and spec._sum.get() > before[2]
     assert done._value.get() == before[3] + 1
+
+
+async def test_checkpointer_choice_follows_the_live_database_not_the_url_setting(
+    db_session: AsyncSession, monkeypatch
+):
+    """Regression: tests run on SQLite while DATABASE_URL points at an unreachable Postgres. The
+    checkpointer must be chosen from the session's own dialect, so no connection is attempted."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from app.agents import checkpointing
+
+    settings = checkpointing.get_settings()
+    monkeypatch.setattr(settings, "database_url", "postgresql+asyncpg://x:y@127.0.0.1:1/none")
+    monkeypatch.setattr(settings, "checkpoint_backend", "auto")
+    checkpointing._savers.clear()
+    saver = await checkpointing.get_checkpointer(db_session)
+    assert isinstance(saver, MemorySaver)
+    checkpointing._savers.clear()

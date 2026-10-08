@@ -87,7 +87,7 @@ async def _run_supervised_diagnosis(
     )
     diagnosis_id = uuid.uuid4()
     thread_id = str(diagnosis_id)
-    graph = _graph(db, tenant_id, model_call, await get_checkpointer())
+    graph = _graph(db, tenant_id, model_call, await get_checkpointer(db))
     await graph.ainvoke(
         {
             "question": question,
@@ -195,7 +195,7 @@ async def resume_if_paused(
     """Completes a paused graph thread with the reviewer's decision. No-op (False) for
     diagnoses that were never paused (tool-loop, no approval needed) or were already resumed."""
     config = {"configurable": {"thread_id": str(diagnosis_id)}}
-    graph = _graph(db, tenant_id, call_model, await get_checkpointer())
+    graph = _graph(db, tenant_id, call_model, await get_checkpointer(db))
     state = await graph.aget_state(config)
     if not state.next:
         return False
