@@ -23,12 +23,20 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 | Retrieval MRR (recall@1) | BM25 0.939 (0.906), dense 0.903 (0.849), hybrid 0.953 (0.925), hybrid + rerank 0.950 (0.943) | 53 labelled questions over 4 manuals (45 chunks; 3 are synthetic), `python -m evaluation.retrieval_ablation` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
 | Answer quality, tool-loop agent | fact coverage 0.91, citation precision 0.91, overconfident on 2/8 unanswerable questions, unsupported numbers in 1/24 answers | 24 questions (16 answerable, 8 not) on the sample manual, Groq `gpt-oss-20b`, deterministic scoring (`python -m evaluation.answer_eval`); relevance cut-off -4.0 at the time; without it, overconfident on 3/3 unanswerable questions (a different model, `gpt-oss-120b`). The cut-off is now -1.15, set on a tuning split; re-run pending |
+| Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
+| Injection screens (116 attacks, 105 benign texts) | regex 50/116 caught (95% CI 35-52%), 4/105 false positives; llm-guard 93/116 (72-86%), 14/105 false positives (8-21%); both 101/116, 18/105 | synthetic template attacks (seed 7) vs. 44 real manual passages, 46 tricky and 15 German benign sentences, `python -m evaluation.injection_eval --llm-guard` |
+
+<details>
+<summary>Engineering benchmarks: cut-off check, quantization, load tests</summary>
+
+| Metric | Result | Dataset and method |
+|---|---|---|
 | Relevance cut-off, held-out check | -1.15: 4/5 answerable questions pass, 1/2 unanswerable blocked (balanced accuracy 0.65; perfect on the tuning questions) | 17 tuning / 7 held-out questions, retrieval scores only (`python -m evaluation.calibrate_cutoff`); far too small to be conclusive |
 | Quantization, 4-bit vs 8-bit (qwen2.5 3B on Ollama, Apple Silicon) | 4-bit: 16.7 tokens/s, 2.1 GB, 2.05 s per answer; 8-bit: 12.5 tokens/s, 3.4 GB, 2.57 s; fact coverage 0.78 on both; abstained on unanswerable 7/8 vs 6/8; invented numbers 0/24 on both | 24 questions with top-3 BM25 context, temperature 0, deterministic scoring, `python -m evaluation.quantization_benchmark`; small set, so quality gaps of a few points are noise. vLLM was not run (needs an NVIDIA GPU) |
-| Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
 | API latency under load | read endpoints: p50 10 ms, p95 23 ms, 0 failures in 1,284 requests (14.9 req/s offered); login p50 2.3 s | Locust, 20 users, 90 s, local Docker, rate limits raised |
 | AI endpoints under load (app overhead only) | 10 users: 0 failures in 210 requests (tool loop p50 1.1 s / p95 8.3 s, supervisor p50 3.2 s / p95 8.8 s, 2.4 req/s); with 20% of model calls rejected by 429: 0 failures in 191 requests, p95 6.6 s | Locust against a fake OpenAI-compatible server (`loadtest/fake_llm_server.py`, 400 ms per call), so a provider quota is not measured; real model latency is separate (7 to 31 s on Groq) |
-| Injection screens (116 attacks, 105 benign texts) | regex 50/116 caught (95% CI 35-52%), 4/105 false positives; llm-guard 93/116 (72-86%), 14/105 false positives (8-21%); both 101/116, 18/105 | synthetic template attacks (seed 7) vs. 44 real manual passages, 46 tricky and 15 German benign sentences, `python -m evaluation.injection_eval --llm-guard` |
+
+</details>
 
 All sets are small and self-written: they check that the pipeline works and show relative differences, not general
 accuracy. Reproduce with the scripts in `evaluation/` and `loadtest/`.
@@ -42,7 +50,7 @@ flowchart LR
     API --> PG[("PostgreSQL")]
     API --> QD[("Qdrant")]
     API -- enqueue --> RD[("Redis")] --> WK["Celery worker<br/>extract, chunk, embed"]
-    API --> AG["Diagnosis agent<br/>tool loop or LangGraph supervisor"]
+    API --> AG["Diagnosis agent<br/>tool loop, or LangGraph supervisor with<br/>documents · sensors · vision · history · planner"]
     AG -- "8 tools" --> TL["manual search · sensors · image<br/>maintenance · past incidents · report"]
     TL --> PG & QD
     AG --> LLM[["Anthropic / Groq / Ollama"]]
