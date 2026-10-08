@@ -33,16 +33,18 @@ from app.agents.diagnosis_agent import (
 
 SPECIALIST_TOOLS: dict[str, set[str]] = {
     "documents": {"search_technical_documents", "get_manual_section"},
-    "sensors": {"query_sensor_history", "get_maintenance_schedule", "calculate"},
+    "sensors": {"query_sensor_history", "calculate"},
+    "history": {"search_past_incidents", "get_maintenance_schedule"},
     "vision": {"analyze_component_image"},
 }
 MAX_SPECIALIST_STEPS = 3
 MAX_SUPERVISOR_STEPS = 5
 
 SUPERVISOR_PROMPT = (
-    "You route a maintenance diagnosis between specialists: documents, sensors, vision. "
+    "You route a maintenance diagnosis between specialists: documents, sensors, vision, "
+    "history (similar approved past incidents and the maintenance schedule). "
     "Given the question and which specialists already ran, reply with ONLY JSON "
-    '{"next": "documents|sensors|vision|synthesize"}. Choose "synthesize" once enough '
+    '{"next": "documents|sensors|vision|history|synthesize"}. Choose "synthesize" once enough '
     "evidence exists. Only choose vision if an image_analysis_id was provided."
 )
 

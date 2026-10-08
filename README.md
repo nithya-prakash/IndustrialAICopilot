@@ -39,7 +39,7 @@ flowchart LR
     API --> QD[("Qdrant")]
     API -- enqueue --> RD[("Redis")] --> WK["Celery worker<br/>extract, chunk, embed"]
     API --> AG["Diagnosis agent<br/>tool loop or LangGraph supervisor"]
-    AG -- "7 tools" --> TL["manual search · sensors<br/>image · maintenance · report"]
+    AG -- "8 tools" --> TL["manual search · sensors · image<br/>maintenance · past incidents · report"]
     TL --> PG & QD
     AG --> LLM[["Anthropic / Groq / Ollama"]]
     AG --> AP["Supervisor approval + audit log"]
@@ -47,11 +47,13 @@ flowchart LR
 ```
 
 - **Hybrid retrieval:** Qdrant dense search plus BM25, fused with Reciprocal Rank Fusion and a cross-encoder reranker.
-- **Agent:** a tool-calling loop, or a LangGraph supervisor with document, sensor and vision specialists. Citations
+- **Agent:** a tool-calling loop, or a LangGraph supervisor with document, sensor, vision and history specialists. Citations
   are validated against gathered evidence; confidence and severity are computed outside the model.
 - **Human oversight:** the graph pauses with `interrupt()` for low-confidence or high-severity results; every decision is
   written to an append-only audit log, and all queries are tenant-scoped.
-- **MCP server:** the same seven tools are available to any MCP client (`app/mcp_server/`).
+- **Incident memory:** a tool retrieves earlier diagnoses that a supervisor approved, by meaning (same workspace only),
+  and treats them as background; they never raise the confidence score.
+- **MCP server:** the same tools are available to any MCP client (`app/mcp_server/`).
 - **Evaluation and observability:** RAGAS scores exported to Langfuse, Prometheus and Grafana for the API.
 
 ## Quickstart
@@ -79,6 +81,9 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
   `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
 - Evaluation sets are tiny (7 questions, 20 attacks), and a 7B model judged a 7B model in the RAGAS run.
 - Free-text sensor findings are not validated, and a small local vision model gave shallow image observations.
+- Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
+  incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each
+  call, which suits hundreds of incidents, not a large history.
 - Paused approvals use in-memory graph checkpoints, so a restart drops the pause (the database record remains).
 - No permanent hosted instance: Hugging Face now charges for Docker Spaces, so the demo is a single container shared on
   demand through a tunnel (`deploy/`).

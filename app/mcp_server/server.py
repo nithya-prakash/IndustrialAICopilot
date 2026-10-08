@@ -1,4 +1,4 @@
-"""Standalone MCP server exposing the Copilot's seven diagnostic tools.
+"""Standalone MCP server exposing the Copilot's diagnostic tools (including past-incident search).
 
 Reuses TOOL_DEFINITIONS and execute_tool unchanged, so any MCP client hits exactly
 the code path the in-app agent uses, including tenant scoping and citation strings.

@@ -98,6 +98,25 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "search_past_incidents",
+        "description": (
+            "Search earlier diagnoses of this workspace that a supervisor approved, by meaning "
+            "(e.g. a previous bearing failure on the same machine). Use it for recurring or "
+            "repeated symptoms. Results are background, not proof for the current case."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Symptom or failure description"},
+                "equipment_id": {
+                    "type": "string",
+                    "description": "Optional; the same machine ranks higher",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "generate_diagnostic_report",
         "description": (
             "Generate a formatted report for a previously completed diagnosis. Only useful "

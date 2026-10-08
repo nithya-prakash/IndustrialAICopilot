@@ -29,6 +29,7 @@ from app.services.equipment_service import (
     get_maintenance_schedule as fetch_maintenance_schedule,
 )
 from app.services.image_service import get_image_analysis
+from app.services.incident_memory import search_past_incidents
 from app.services.report_service import format_diagnostic_report
 from app.services.sensor_service import query_sensor_history as fetch_sensor_history
 from app.tools.calculator import CalculationError, safe_calculate
@@ -55,6 +56,7 @@ async def execute_tool(name: str, tool_input: dict, ctx: ToolContext) -> ToolExe
         "analyze_component_image": _analyze_component_image,
         "query_sensor_history": _query_sensor_history,
         "get_maintenance_schedule": _get_maintenance_schedule,
+        "search_past_incidents": _search_past_incidents,
         "calculate": _calculate,
         "generate_diagnostic_report": _generate_diagnostic_report,
     }
@@ -238,6 +240,46 @@ async def _get_maintenance_schedule(tool_input: dict, ctx: ToolContext) -> ToolE
 
     return ToolExecutionResult(
         output={"tasks": tasks}, citations=[e["citation"] for e in evidence], evidence=evidence
+    )
+
+
+async def _search_past_incidents(tool_input: dict, ctx: ToolContext) -> ToolExecutionResult:
+    incidents = await search_past_incidents(
+        ctx.db,
+        tenant_id=ctx.tenant_id,
+        query=tool_input.get("query", ""),
+        equipment_id=tool_input.get("equipment_id"),
+    )
+    if not incidents:
+        return ToolExecutionResult(
+            output={"incidents": [], "message": "No similar supervisor-approved incidents found."}
+        )
+    evidence = []
+    for i in incidents:
+        short_id, machine = str(i.diagnosis_id)[:8], i.equipment_id or "unknown"
+        citation = f"[Past incident {short_id}, {machine}, {i.date}]"
+        evidence.append(
+            {"type": "past_incident", "citation": citation, "detail": i.summary[:300]}
+        )
+    return ToolExecutionResult(
+        output={
+            "note": "Earlier supervisor-approved diagnoses: background, not proof for this case.",
+            "incidents": [
+                {
+                    "citation": e["citation"],
+                    "equipment_id": i.equipment_id,
+                    "date": i.date,
+                    "question": i.question,
+                    "summary": i.summary,
+                    "top_causes": i.top_causes,
+                    "recommended_action": i.recommended_action,
+                    "similarity": i.similarity,
+                }
+                for e, i in zip(evidence, incidents, strict=True)
+            ],
+        },
+        citations=[e["citation"] for e in evidence],
+        evidence=evidence,
     )
 
 

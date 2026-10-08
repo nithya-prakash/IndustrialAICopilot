@@ -21,7 +21,7 @@ def _factory(session: AsyncSession) -> async_sessionmaker[AsyncSession]:
 def test_exposes_every_agent_tool_with_its_schema() -> None:
     specs = list_tool_specs()
     assert [s.name for s in specs] == [t["name"] for t in TOOL_DEFINITIONS]
-    assert len(specs) == 7
+    assert len(specs) == len(TOOL_DEFINITIONS)
     for spec, tool in zip(specs, TOOL_DEFINITIONS, strict=True):
         assert spec.inputSchema == tool["input_schema"]
 
