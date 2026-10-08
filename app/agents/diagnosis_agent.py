@@ -24,6 +24,7 @@ from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
 from app.observability.metrics import (
+    agent_run_duration_seconds,
     agent_tool_call_duration_seconds,
     agent_tool_calls_total,
     diagnoses_total,
@@ -290,7 +291,7 @@ async def _persist_failed_diagnosis(
     return diagnosis
 
 
-async def run_diagnosis(
+async def _run_diagnosis(
     db: AsyncSession,
     *,
     tenant_id: str,
@@ -520,4 +521,14 @@ async def run_diagnosis(
     )
     await db.commit()
     await db.refresh(diagnosis)
+    return diagnosis
+
+
+async def run_diagnosis(*args, **kwargs) -> Diagnosis:
+    """Runs the tool-loop agent (see `_run_diagnosis`) and records its wall-clock duration."""
+    start = time.perf_counter()
+    diagnosis = await _run_diagnosis(*args, **kwargs)
+    agent_run_duration_seconds.labels(
+        orchestrator="tool_loop", status=diagnosis.status.value
+    ).observe(time.perf_counter() - start)
     return diagnosis

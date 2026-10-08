@@ -212,7 +212,7 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
             )
     except Exception as exc:
         record_llm_call(
-            provider="openai",
+            provider=settings.llm_provider,
             model=settings.llm_model,
             operation="agent",
             status="error",
@@ -222,7 +222,7 @@ async def _call_openai(messages: list[dict], system: str, use_tools: bool = True
 
     usage = response.usage
     record_llm_call(
-        provider="openai",
+        provider=settings.llm_provider,
         model=settings.llm_model,
         operation="agent",
         status="success",

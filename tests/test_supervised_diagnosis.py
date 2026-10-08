@@ -39,3 +39,34 @@ async def test_supervised_diagnosis_persists_and_resumes(db_session: AsyncSessio
     )
     assert resumed is True
     assert diagnosis.id not in supervised._paused_threads
+
+
+async def test_supervisor_path_emits_run_tool_specialist_and_diagnosis_metrics(
+    db_session: AsyncSession, monkeypatch
+):
+    from app.observability import metrics as m
+
+    async def fake_execute(name, tool_input, ctx):
+        return ToolExecutionResult(
+            output={}, citations=[CITE], evidence=[{"type": "document_chunk", "citation": CITE}]
+        )
+
+    monkeypatch.setattr(supervised, "execute_tool", fake_execute)
+
+    tool = m.agent_tool_calls_total.labels(tool="search_technical_documents", status="success")
+    runs = m.agent_run_duration_seconds.labels(orchestrator="supervisor", status="completed")
+    spec = m.agent_specialist_duration_seconds.labels(specialist="documents")
+    done = m.diagnoses_total.labels(status="completed", severity="high")
+    before = (tool._value.get(), runs._sum.get(), spec._sum.get(), done._value.get())
+
+    await supervised.run_supervised_diagnosis(
+        db_session,
+        tenant_id="acme",
+        user_id=uuid.uuid4(),
+        conversation_id=None,
+        question="Why hot?",
+        model_call=FakeModel(["documents", "synthesize"]),
+    )
+    assert tool._value.get() == before[0] + 1
+    assert runs._sum.get() > before[1] and spec._sum.get() > before[2]
+    assert done._value.get() == before[3] + 1

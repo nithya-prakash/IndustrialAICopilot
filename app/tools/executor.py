@@ -9,6 +9,8 @@ retrieved" pattern as Phase 3's citation-marker validation, applied here to
 every evidence type (documents, sensors, images, maintenance), not just
 document chunks.
 """
+
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -23,6 +25,7 @@ from app.analytics.sensors import (
     statistical_summary,
 )
 from app.models.diagnosis import Diagnosis
+from app.observability.metrics import retrieval_duration_seconds
 from app.rag.retrieval import get_manual_section as fetch_manual_section
 from app.rag.retrieval import hybrid_search
 from app.services.equipment_service import (
@@ -73,7 +76,11 @@ async def execute_tool(name: str, tool_input: dict, ctx: ToolContext) -> ToolExe
 
 async def _search_technical_documents(tool_input: dict, ctx: ToolContext) -> ToolExecutionResult:
     query = tool_input.get("query", "")
+    retrieval_start = time.perf_counter()
     chunks = await hybrid_search(ctx.db, query, tenant_id=ctx.tenant_id)
+    retrieval_duration_seconds.labels(stage="hybrid_search").observe(
+        time.perf_counter() - retrieval_start
+    )
     if not chunks:
         return ToolExecutionResult(
             output={"results": [], "message": "No relevant documentation found."}
@@ -258,9 +265,7 @@ async def _search_past_incidents(tool_input: dict, ctx: ToolContext) -> ToolExec
     for i in incidents:
         short_id, machine = str(i.diagnosis_id)[:8], i.equipment_id or "unknown"
         citation = f"[Past incident {short_id}, {machine}, {i.date}]"
-        evidence.append(
-            {"type": "past_incident", "citation": citation, "detail": i.summary[:300]}
-        )
+        evidence.append({"type": "past_incident", "citation": citation, "detail": i.summary[:300]})
     return ToolExecutionResult(
         output={
             "note": "Earlier supervisor-approved diagnoses: background, not proof for this case.",
@@ -299,9 +304,7 @@ async def _generate_diagnostic_report(tool_input: dict, ctx: ToolContext) -> Too
         return ToolExecutionResult(output={}, error="Invalid diagnosis_id")
 
     result = await ctx.db.execute(
-        select(Diagnosis).where(
-            Diagnosis.id == diagnosis_id, Diagnosis.tenant_id == ctx.tenant_id
-        )
+        select(Diagnosis).where(Diagnosis.id == diagnosis_id, Diagnosis.tenant_id == ctx.tenant_id)
     )
     diagnosis = result.scalar_one_or_none()
     if diagnosis is None:

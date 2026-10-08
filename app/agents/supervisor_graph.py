@@ -14,6 +14,7 @@ testable without a real LLM or database.
 """
 
 import json
+import time
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, TypedDict
 
@@ -30,6 +31,7 @@ from app.agents.diagnosis_agent import (
     _summarize_tool_output,
     _validate_causes,
 )
+from app.observability.metrics import agent_specialist_duration_seconds
 
 SPECIALIST_TOOLS: dict[str, set[str]] = {
     "documents": {"search_technical_documents", "get_manual_section"},
@@ -107,6 +109,7 @@ def build_supervisor_graph(
         allowed = SPECIALIST_TOOLS[name]
 
         async def specialist(state: DiagnosisState) -> dict:
+            started = time.perf_counter()
             system = (
                 f"You are the {name} specialist. Gather evidence ONLY with your tools "
                 f"({', '.join(sorted(allowed))}); then reply with a one-line text finding. "
@@ -158,6 +161,9 @@ def build_supervisor_graph(
                         }
                     )
                 messages.append({"role": "user", "content": results})
+            agent_specialist_duration_seconds.labels(specialist=name).observe(
+                time.perf_counter() - started
+            )
             return {
                 "visited": [name],
                 "citations": citations,

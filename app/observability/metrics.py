@@ -85,6 +85,24 @@ diagnosis_confidence = Histogram(
     "Confidence score of completed diagnoses",
     buckets=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0),
 )
+agent_run_duration_seconds = Histogram(
+    "agent_run_duration_seconds",
+    "Wall-clock duration of one complete diagnosis run",
+    ["orchestrator", "status"],
+    buckets=(0.5, 1, 2, 5, 10, 20, 40, 80, 160, 320),
+)
+agent_specialist_duration_seconds = Histogram(
+    "agent_specialist_duration_seconds",
+    "Duration of one specialist's tool loop inside the supervisor graph",
+    ["specialist"],
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 40, 80),
+)
+retrieval_duration_seconds = Histogram(
+    "retrieval_duration_seconds",
+    "Duration of a retrieval stage (e.g. hybrid search for the search_technical_documents tool)",
+    ["stage"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+)
 approvals_total = Counter(
     "approvals_total",
     "Total supervisor approval decisions",

@@ -7,6 +7,7 @@ Checkpoints are in-memory (MemorySaver): a restart drops paused threads, but
 the Diagnosis row and its DB approval flow are unaffected.
 """
 
+import time
 import uuid
 from functools import partial
 
@@ -23,6 +24,13 @@ from app.agents.supervisor_graph import build_supervisor_graph
 from app.config import get_settings
 from app.models.conversation import Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
+from app.observability.metrics import (
+    agent_run_duration_seconds,
+    agent_tool_call_duration_seconds,
+    agent_tool_calls_total,
+    diagnoses_total,
+    diagnosis_confidence,
+)
 from app.rag.generation import call_model
 from app.services.audit_service import log_event
 from app.tools.executor import ToolContext, execute_tool
@@ -31,18 +39,27 @@ _checkpointer = MemorySaver()
 _paused_threads: dict[uuid.UUID, str] = {}
 
 
+async def _instrumented_tool(name: str, tool_input: dict, ctx: ToolContext):
+    """execute_tool plus the same per-tool metrics the tool-loop agent records."""
+    start = time.perf_counter()
+    result = await execute_tool(name, tool_input, ctx)
+    agent_tool_call_duration_seconds.labels(tool=name).observe(time.perf_counter() - start)
+    agent_tool_calls_total.labels(tool=name, status="error" if result.error else "success").inc()
+    return result
+
+
 def _graph(db: AsyncSession, tenant_id: str, model_call):
     ctx = ToolContext(db=db, tenant_id=tenant_id)
     return build_supervisor_graph(
         model_call,
-        lambda name, inp: execute_tool(name, inp, ctx),
+        lambda name, inp: _instrumented_tool(name, inp, ctx),
         approval_threshold=get_settings().confidence_approval_threshold,
         checkpointer=_checkpointer,
         plain_call=partial(model_call, use_tools=False) if model_call is call_model else None,
     )
 
 
-async def run_supervised_diagnosis(
+async def _run_supervised_diagnosis(
     db: AsyncSession,
     *,
     tenant_id: str,
@@ -126,6 +143,8 @@ async def run_supervised_diagnosis(
     )
     db.add(diagnosis)
     await db.flush()
+    diagnoses_total.labels(status="completed", severity=result["severity"]).inc()
+    diagnosis_confidence.observe(result["confidence"])
     paused = bool(final.get("approval") is None and result["requires_human_approval"])
     if paused:
         _paused_threads[diagnosis.id] = thread_id
@@ -170,3 +189,13 @@ async def resume_if_paused(
         {"configurable": {"thread_id": thread_id}},
     )
     return True
+
+
+async def run_supervised_diagnosis(*args, **kwargs) -> Diagnosis:
+    """Runs the supervisor graph (see `_run_supervised_diagnosis`) and records its duration."""
+    start = time.perf_counter()
+    diagnosis = await _run_supervised_diagnosis(*args, **kwargs)
+    agent_run_duration_seconds.labels(
+        orchestrator="supervisor", status=diagnosis.status.value
+    ).observe(time.perf_counter() - start)
+    return diagnosis
