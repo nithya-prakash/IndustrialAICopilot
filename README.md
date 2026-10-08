@@ -69,6 +69,12 @@ docker compose up --build
 
 Open http://localhost:3002 and create a workspace (you become its admin). API docs: http://localhost:8000/docs.
 
+**Windows:** install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL 2 backend, at least 6 GB RAM
+for Docker) and Git, then in PowerShell: `git clone https://github.com/nithya-prakash/IndustrialAICopilot.git`,
+`cd IndustrialAICopilot`, `copy .env.example .env`, `docker compose up --build`, and open http://localhost:3002.
+Line endings are pinned to LF by `.gitattributes`. The `deploy/*.sh` helpers need Git Bash or WSL. Developed and tested
+on macOS; the Windows path is expected to work through Docker but has not been run on Windows.
+
 Share a live demo from your own machine: `deploy/demo-tunnel.sh` starts a single-container build (all services, seeded
 demo workspace; logins `demo_technician` / `demo_supervisor`, password `Demo-Copilot-2026`) behind a free Cloudflare
 tunnel and prints a public URL. It works only while your machine and Docker are running, and `deploy/demo-tunnel.sh stop` ends it.
