@@ -4,6 +4,7 @@ long. Each chunk carries the section/subsection it belongs to, so citations
 can point at "Troubleshooting > Unusual noise" rather than a raw page
 number.
 """
+
 from dataclasses import dataclass
 
 from app.ingestion.pdf_extractor import ExtractedBlock

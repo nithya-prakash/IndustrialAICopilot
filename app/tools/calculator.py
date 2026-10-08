@@ -6,6 +6,7 @@ node types (numbers, +-*/ %, **, unary +-, parentheses); anything else
 (names, calls, attribute access, comprehensions, ...) is rejected before
 evaluation ever happens.
 """
+
 import ast
 import operator
 

@@ -59,6 +59,7 @@ class DiagnosisResponse(BaseModel):
     limitations: list[str]
     llm_provider: str
     llm_model: str
+    usage: dict | None = None
     created_at: datetime
     approval: ApprovalResponse | None = None
 

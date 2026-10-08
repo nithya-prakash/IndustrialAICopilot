@@ -5,6 +5,7 @@ Revises: e2a1c9f4b6d2
 Create Date: 2026-08-23 00:00:00
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -45,9 +46,7 @@ def upgrade() -> None:
         sa.Column("error_message", sa.Text(), nullable=True),
     )
     op.create_index(op.f("ix_image_analyses_tenant_id"), "image_analyses", ["tenant_id"])
-    op.create_index(
-        op.f("ix_image_analyses_equipment_type"), "image_analyses", ["equipment_type"]
-    )
+    op.create_index(op.f("ix_image_analyses_equipment_type"), "image_analyses", ["equipment_type"])
     op.create_index(op.f("ix_image_analyses_equipment_id"), "image_analyses", ["equipment_id"])
 
 

@@ -144,6 +144,20 @@ celery_task_duration_seconds = Histogram(
 )
 
 
+def estimate_cost_usd(provider: str, input_tokens: int, output_tokens: int) -> float:
+    """Cost from the optional per-1k-token rates in settings; 0.0 unless rates are configured."""
+    settings = get_settings()
+    if provider == "anthropic":
+        input_rate = settings.anthropic_input_cost_per_1k_usd
+        output_rate = settings.anthropic_output_cost_per_1k_usd
+    elif provider in ("openai", "groq", "gemini"):
+        input_rate = settings.openai_input_cost_per_1k_usd
+        output_rate = settings.openai_output_cost_per_1k_usd
+    else:
+        input_rate = output_rate = 0.0
+    return (input_tokens / 1000) * input_rate + (output_tokens / 1000) * output_rate
+
+
 def record_llm_call(
     *,
     provider: str,
@@ -172,16 +186,6 @@ def record_llm_call(
             provider=provider, model=model, operation=operation, token_type="output"
         ).inc(output_tokens)
 
-    settings = get_settings()
-    if provider == "anthropic":
-        input_rate = settings.anthropic_input_cost_per_1k_usd
-        output_rate = settings.anthropic_output_cost_per_1k_usd
-    elif provider == "openai":
-        input_rate = settings.openai_input_cost_per_1k_usd
-        output_rate = settings.openai_output_cost_per_1k_usd
-    else:
-        input_rate = output_rate = 0.0
-
-    cost = (input_tokens / 1000) * input_rate + (output_tokens / 1000) * output_rate
+    cost = estimate_cost_usd(provider, input_tokens, output_tokens)
     if cost:
         llm_cost_usd_total.labels(provider=provider, model=model, operation=operation).inc(cost)

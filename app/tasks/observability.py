@@ -19,6 +19,7 @@ Importing this module registers the signal handlers below (Celery signals
 are connected at import time, not called directly) — see
 app/tasks/celery_app.py.
 """
+
 import os
 import shutil
 import time

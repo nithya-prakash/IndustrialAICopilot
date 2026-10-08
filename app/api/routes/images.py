@@ -38,9 +38,7 @@ def _to_response(record: ImageAnalysis) -> ImageAnalysisResponse:
     )
 
 
-@router.post(
-    "/analyze", response_model=ImageAnalysisResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/analyze", response_model=ImageAnalysisResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(_settings.rate_limit_ai)
 async def analyze(
     request: Request,

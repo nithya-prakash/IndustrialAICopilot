@@ -4,6 +4,7 @@ Query -> [dense (Qdrant) + BM25 (Postgres-scoped)] -> Reciprocal Rank Fusion
 -> cross-encoder rerank -> top-k. See docs/architecture-decisions.md for why
 each stage exists.
 """
+
 import uuid
 from dataclasses import dataclass
 
@@ -147,9 +148,7 @@ async def hybrid_search(
     # rows_by_id below — without this, every dense hit is silently dropped
     # and "hybrid" search degrades to BM25-only (a real bug found and
     # fixed during the Fix Pass evaluation; see the ADR entry).
-    chunk_id_by_point_id = {
-        row.qdrant_point_id: str(row.id) for row in rows if row.qdrant_point_id
-    }
+    chunk_id_by_point_id = {row.qdrant_point_id: str(row.id) for row in rows if row.qdrant_point_id}
 
     query_vector = embed_texts([query])[0]
     dense_results = qdrant_dense_search(
@@ -187,9 +186,9 @@ async def hybrid_search(
 
     rerank_candidates = [(cid, rows_by_id[cid].content) for cid in fused_ids]
     reranked = rerank(query, rerank_candidates)
-    top = [
-        (cid, score) for cid, score in reranked if score >= settings.min_relevance_score
-    ][:result_limit]
+    top = [(cid, score) for cid, score in reranked if score >= settings.min_relevance_score][
+        :result_limit
+    ]
 
     results: list[RetrievedChunk] = []
     for cid, score in top:

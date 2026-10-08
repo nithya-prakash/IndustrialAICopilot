@@ -4,6 +4,7 @@ bi-encoder cosine similarity used for initial retrieval but too slow to run
 over the whole corpus, hence: cheap bi-encoder/BM25 retrieval first to get a
 candidate set, then this reranks just that candidate set.
 """
+
 from functools import lru_cache
 
 from sentence_transformers import CrossEncoder

@@ -87,9 +87,7 @@ async def analyze_uploaded_image(
         record.error_message = str(exc)
         await db.commit()
         await db.refresh(record)
-        logger.error(
-            "vision_analysis_failed", image_analysis_id=str(analysis_id), error=str(exc)
-        )
+        logger.error("vision_analysis_failed", image_analysis_id=str(analysis_id), error=str(exc))
         return record
 
     record.status = ImageAnalysisStatus.ready

@@ -37,9 +37,7 @@ async def list_audit_logs(
     resource_id: uuid.UUID | str | None = None,
 ) -> list[AuditLog]:
     query = (
-        select(AuditLog)
-        .where(AuditLog.tenant_id == tenant_id)
-        .order_by(AuditLog.created_at.desc())
+        select(AuditLog).where(AuditLog.tenant_id == tenant_id).order_by(AuditLog.created_at.desc())
     )
     if resource_type:
         query = query.where(AuditLog.resource_type == resource_type)

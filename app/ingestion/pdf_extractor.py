@@ -17,6 +17,7 @@ scanned-page problem) isn't missed entirely. Genuine layout-ML structure
 detection is still a real, larger improvement this doesn't attempt — see
 docs/architecture-decisions.md.
 """
+
 import re
 from collections import Counter
 from dataclasses import dataclass, field

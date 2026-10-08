@@ -2,6 +2,7 @@
 default so RAG works with zero API keys and zero cost for local dev — the
 model is swappable via EMBEDDING_MODEL/EMBEDDING_DIM without code changes.
 """
+
 from functools import lru_cache
 
 from sentence_transformers import SentenceTransformer

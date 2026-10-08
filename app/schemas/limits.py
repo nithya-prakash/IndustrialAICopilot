@@ -6,6 +6,7 @@ cost; and equipment IDs/types and sensor metric names land in fixed-width
 DB columns (String(128) / String(64)), where an oversized value used to
 surface as a Postgres error (500) instead of a clean 422.
 """
+
 from typing import Annotated
 
 from pydantic import Field, StringConstraints

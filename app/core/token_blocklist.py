@@ -8,6 +8,7 @@ remaining time-to-live, so a revoked token's entry expires at the exact
 moment the token itself would have expired anyway — no separate cleanup
 job needed, and the blocklist never grows unbounded.
 """
+
 from datetime import UTC, datetime
 
 import redis.asyncio as redis

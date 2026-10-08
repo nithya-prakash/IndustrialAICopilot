@@ -134,9 +134,7 @@ def unsafe_action_categories(text: str) -> list[str]:
     return sorted(found)
 
 
-def sanitize_recommendations(
-    action: str, checks: list[str]
-) -> tuple[str, list[str], list[str]]:
+def sanitize_recommendations(action: str, checks: list[str]) -> tuple[str, list[str], list[str]]:
     """Replaces an unsafe recommended action with a safe fallback and drops unsafe checks.
     Returns (action, checks, categories_blocked)."""
     blocked = set(unsafe_action_categories(action))

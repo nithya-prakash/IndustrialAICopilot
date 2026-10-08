@@ -8,6 +8,7 @@ of stripping EXIF metadata (which can carry GPS/location data — a
 meaningful privacy leak for a technician's phone photo) and downscaling it
 to a bounded size.
 """
+
 import io
 
 from PIL import Image, UnidentifiedImageError

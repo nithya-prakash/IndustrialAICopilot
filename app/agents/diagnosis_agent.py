@@ -25,7 +25,7 @@ from app.guardrails import sanitize_recommendations, scan_obj
 from app.llm.client import LLMError
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
-from app.observability import tracing
+from app.observability import tracing, usage
 from app.observability.metrics import (
     agent_run_duration_seconds,
     agent_tool_call_duration_seconds,
@@ -564,7 +564,13 @@ async def run_diagnosis(*args, **kwargs) -> Diagnosis:
     with tracing.observation(
         "diagnosis", metadata={"orchestrator": "tool_loop", "tenant_id": kwargs.get("tenant_id")}
     ) as root:
-        diagnosis = await _run_diagnosis(*args, **kwargs)
+        run_usage, usage_token = usage.start_run("tool_loop")
+        try:
+            diagnosis = await _run_diagnosis(*args, **kwargs)
+        finally:
+            usage.end_run(usage_token)
+        diagnosis.usage = run_usage.as_dict()
+        await args[0].commit()
         root.update(
             output={"status": diagnosis.status.value, "confidence": diagnosis.confidence},
             metadata={"diagnosis_id": str(diagnosis.id), "severity": diagnosis.severity.value},

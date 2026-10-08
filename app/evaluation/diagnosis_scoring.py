@@ -13,6 +13,7 @@ citation_validity_rate / meets_severity_floor read off invariants the
 diagnosis agent already enforces deterministically (Phase 6). Nothing here
 asks a model to grade another model's output.
 """
+
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 

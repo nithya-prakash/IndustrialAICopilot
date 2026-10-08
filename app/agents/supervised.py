@@ -25,7 +25,7 @@ from app.agents.supervisor_graph import build_supervisor_graph
 from app.config import get_settings
 from app.models.conversation import Message, MessageRole
 from app.models.diagnosis import Diagnosis, DiagnosisSeverity, DiagnosisStatus
-from app.observability import tracing
+from app.observability import tracing, usage
 from app.observability.metrics import (
     agent_run_duration_seconds,
     agent_tool_call_duration_seconds,
@@ -219,7 +219,13 @@ async def run_supervised_diagnosis(*args, **kwargs) -> Diagnosis:
     with tracing.observation(
         "diagnosis", metadata={"orchestrator": "supervisor", "tenant_id": kwargs.get("tenant_id")}
     ) as root:
-        diagnosis = await _run_supervised_diagnosis(*args, **kwargs)
+        run_usage, usage_token = usage.start_run("supervisor")
+        try:
+            diagnosis = await _run_supervised_diagnosis(*args, **kwargs)
+        finally:
+            usage.end_run(usage_token)
+        diagnosis.usage = run_usage.as_dict()
+        await args[0].commit()
         root.update(
             output={"status": diagnosis.status.value, "confidence": diagnosis.confidence},
             metadata={"diagnosis_id": str(diagnosis.id), "severity": diagnosis.severity.value},

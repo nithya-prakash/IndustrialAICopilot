@@ -118,9 +118,7 @@ async def create_document_version(
         document = await get_document(db, document_id=document_id, tenant_id=tenant_id)
         if document is None:
             raise DocumentNotFoundError(str(document_id))
-        next_version_number = (
-            max((v.version_number for v in document.versions), default=0) + 1
-        )
+        next_version_number = max((v.version_number for v in document.versions), default=0) + 1
         for existing in document.versions:
             if existing.is_current:
                 superseded_version_ids.append(str(existing.id))

@@ -10,6 +10,7 @@ mean" is a defensible, explainable answer in a way "the model scored it
 cases where the anomaly pattern isn't a simple single-variable outlier —
 see docs/architecture-decisions.md.
 """
+
 import statistics
 from dataclasses import dataclass
 from datetime import datetime

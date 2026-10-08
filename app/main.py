@@ -98,6 +98,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Respon
     rate_limit_exceeded_total.labels(path=path_label).inc()
     return _rate_limit_exceeded_handler(request, exc)
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,

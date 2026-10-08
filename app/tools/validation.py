@@ -5,6 +5,7 @@ missing or unknown keys, wrong types, oversized strings, malformed UUIDs or time
 them here (with a message the model can act on) keeps handlers simple and keeps untrusted
 strings out of queries, embeddings and calculators.
 """
+
 import uuid
 from datetime import datetime
 

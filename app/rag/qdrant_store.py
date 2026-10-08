@@ -18,11 +18,14 @@ def ensure_collection() -> None:
     settings = get_settings()
     client = get_qdrant_client()
     if not call_with_retry_sync(
-        "qdrant_collection_exists", is_transient_qdrant_error,
-        client.collection_exists, settings.qdrant_collection,
+        "qdrant_collection_exists",
+        is_transient_qdrant_error,
+        client.collection_exists,
+        settings.qdrant_collection,
     ):
         call_with_retry_sync(
-            "qdrant_create_collection", is_transient_qdrant_error,
+            "qdrant_create_collection",
+            is_transient_qdrant_error,
             client.create_collection,
             collection_name=settings.qdrant_collection,
             vectors_config=qmodels.VectorParams(
@@ -38,7 +41,8 @@ def upsert_chunks(points: list[tuple[str, list[float], dict[str, Any]]]) -> None
     settings = get_settings()
     client = get_qdrant_client()
     call_with_retry_sync(
-        "qdrant_upsert", is_transient_qdrant_error,
+        "qdrant_upsert",
+        is_transient_qdrant_error,
         client.upsert,
         collection_name=settings.qdrant_collection,
         points=[
@@ -85,8 +89,10 @@ def search(
     settings = get_settings()
     client = get_qdrant_client()
     if not call_with_retry_sync(
-        "qdrant_collection_exists", is_transient_qdrant_error,
-        client.collection_exists, settings.qdrant_collection,
+        "qdrant_collection_exists",
+        is_transient_qdrant_error,
+        client.collection_exists,
+        settings.qdrant_collection,
     ):
         return []
 
@@ -102,9 +108,7 @@ def search(
         )
     if equipment_id:
         must.append(
-            qmodels.FieldCondition(
-                key="equipment_id", match=qmodels.MatchValue(value=equipment_id)
-            )
+            qmodels.FieldCondition(key="equipment_id", match=qmodels.MatchValue(value=equipment_id))
         )
     if document_id:
         must.append(
@@ -112,7 +116,8 @@ def search(
         )
 
     results = call_with_retry_sync(
-        "qdrant_search", is_transient_qdrant_error,
+        "qdrant_search",
+        is_transient_qdrant_error,
         client.query_points,
         collection_name=settings.qdrant_collection,
         query=query_vector,

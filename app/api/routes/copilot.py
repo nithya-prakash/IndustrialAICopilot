@@ -41,6 +41,7 @@ def to_diagnosis_response(
         limitations=diagnosis.limitations or [],
         llm_provider=diagnosis.llm_provider,
         llm_model=diagnosis.llm_model,
+        usage=diagnosis.usage,
         created_at=diagnosis.created_at,
         approval=(
             ApprovalResponse(

@@ -14,6 +14,7 @@ preferring explicit per-route limits so the policy is visible at each
 endpoint). See `docs/architecture-decisions.md` for the audit finding
 that led to this file existing.
 """
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 

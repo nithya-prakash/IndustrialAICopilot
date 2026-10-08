@@ -7,6 +7,7 @@ with the text-layer path there — less reliable than that path's font-size
 signal (which OCR output has no equivalent of), a known limitation for
 scanned documents with inconsistent heading conventions.
 """
+
 from pathlib import Path
 
 import pytesseract

@@ -113,8 +113,11 @@ async def approve(
         raise _handle_decision_errors(exc) from exc
 
     await resume_if_paused(
-        db, tenant_id=user.tenant_id, diagnosis_id=diagnosis_id,
-        decision="approved", reviewer=str(user.id),
+        db,
+        tenant_id=user.tenant_id,
+        diagnosis_id=diagnosis_id,
+        decision="approved",
+        reviewer=str(user.id),
     )
     diagnosis = await get_diagnosis(db, diagnosis_id=diagnosis_id, tenant_id=user.tenant_id)
     return to_diagnosis_response(diagnosis, approval)
@@ -144,8 +147,11 @@ async def reject(
         raise _handle_decision_errors(exc) from exc
 
     await resume_if_paused(
-        db, tenant_id=user.tenant_id, diagnosis_id=diagnosis_id,
-        decision="rejected", reviewer=str(user.id),
+        db,
+        tenant_id=user.tenant_id,
+        diagnosis_id=diagnosis_id,
+        decision="rejected",
+        reviewer=str(user.id),
     )
     diagnosis = await get_diagnosis(db, diagnosis_id=diagnosis_id, tenant_id=user.tenant_id)
     return to_diagnosis_response(diagnosis, approval)

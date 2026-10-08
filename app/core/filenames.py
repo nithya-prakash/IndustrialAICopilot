@@ -11,6 +11,7 @@ actually needs to recognize their file, including non-ASCII characters
 (accented names, other scripts), which a strict ASCII allowlist would have
 destroyed.
 """
+
 import re
 from pathlib import PurePosixPath, PureWindowsPath
 

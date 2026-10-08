@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from app.config import OPENAI_COMPATIBLE_BASE_URLS, get_settings
 from app.core.retry import call_with_retry, describe_llm_failure, is_transient_llm_error
 from app.llm.client import LLMError
-from app.observability import tracing
+from app.observability import tracing, usage
 from app.observability.metrics import record_llm_call
 from app.tools.definitions import TOOL_DEFINITIONS
 
@@ -298,6 +298,9 @@ async def call_model(messages: list[dict], system: str, use_tools: bool = True) 
         input={"system": system, "messages": messages},
     ) as generation:
         turn = await _dispatch(messages, system, use_tools)
+        usage.record_call(
+            settings.llm_provider, settings.llm_model, turn.input_tokens, turn.output_tokens
+        )
         generation.update(
             output=turn.text or [call.name for call in turn.tool_calls],
             usage_details={"input": turn.input_tokens, "output": turn.output_tokens},

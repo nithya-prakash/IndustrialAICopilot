@@ -69,6 +69,8 @@ class Diagnosis(UUIDPkMixin, TimestampMixin, Base):
     # audit trail. The full AuditLog (all requests, not just tool calls) is
     # Phase 7.
     tool_calls: Mapped[list | None] = mapped_column(PortableJSON)
+    # {"orchestrator", "models", "llm_calls", "input_tokens", "output_tokens", "estimated_cost_usd"}
+    usage: Mapped[dict | None] = mapped_column(PortableJSON)
 
     llm_provider: Mapped[str] = mapped_column(String(32), nullable=False)
     llm_model: Mapped[str] = mapped_column(String(128), nullable=False)
