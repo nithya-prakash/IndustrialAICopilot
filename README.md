@@ -84,77 +84,65 @@ docker compose up --build
 
 Open http://localhost:3002 and create a workspace (you become its admin). API docs: http://localhost:8000/docs.
 
-**Windows:** install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL 2 backend, at least 6 GB RAM
-for Docker) and Git, then in PowerShell: `git clone https://github.com/nithya-prakash/IndustrialAICopilot.git`,
-`cd IndustrialAICopilot`, `copy .env.example .env`, `docker compose up --build`, and open http://localhost:3002.
-Line endings are pinned to LF by `.gitattributes`. The `deploy/*.sh` helpers need Git Bash or WSL. Developed and tested
-on macOS; the Windows path is expected to work through Docker but has not been run on Windows.
+**Windows:** install Docker Desktop (WSL 2 backend, at least 6 GB RAM) and Git, then run the same commands in PowerShell
+(`copy` for `cp`). Line endings are pinned to LF; the `deploy/*.sh` helpers need Git Bash or WSL. Developed on macOS; the
+Windows path has not been run.
 
-Share a live demo from your own machine: `deploy/demo-tunnel.sh` starts a single-container build (all services, seeded
-demo workspace; logins `demo_technician` / `demo_supervisor`, password `Demo-Copilot-2026`) behind a free Cloudflare
-tunnel and prints a public URL. It works only while your machine and Docker are running, and `deploy/demo-tunnel.sh stop` ends it.
+Share a live demo from your machine: `deploy/demo-tunnel.sh` starts a single-container build (seeded workspace; logins
+`demo_technician` / `demo_supervisor`, password `Demo-Copilot-2026`) behind a free Cloudflare tunnel and prints a public
+URL. `deploy/demo-tunnel.sh stop` ends it.
 
 ## Tech stack
 
 FastAPI, LangGraph, SQLAlchemy, PostgreSQL, Qdrant, Celery, Redis, sentence-transformers, React, TypeScript,
 RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, GitHub Actions, pytest.
 
-## Security and guardrails
+## Security and design choices
 
-- **Injection:** retrieved text is screened (regex, optionally llm-guard) and flagged in the diagnosis; tool output is
-  treated as data. llm-guard catches far more (80% vs 43%) but flags 8 of 15 German benign sentences (none of the 44 real
-  manual passages). Both barely detect citation-forging and confidence-manipulation attacks, which is why those are
-  handled structurally: citations are checked against retrieved evidence and confidence is computed outside the model.
-- **Tool inputs:** every tool call is validated centrally (required and unknown keys, types, lengths, UUIDs, ISO times).
-- **Evidence:** citations are checked against what was retrieved, passages below a calibrated relevance score are dropped,
-  and confidence is computed outside the model.
-- **Unsafe actions:** recommendations that bypass safety devices, skip lockout, exceed ratings or ignore alarms are
-  replaced with a safe fallback and force supervisor approval (rule-based; it cannot judge advice in general).
+- **Injection:** retrieved text is screened (regex, optionally llm-guard) and flagged; tool output is treated as data.
+  llm-guard catches far more (80% vs 43%) but flags 8 of 15 German benign sentences (none of the 44 real manual
+  passages). Both barely detect citation-forging and confidence-manipulation attacks, so those are handled structurally:
+  citations are checked against retrieved evidence and confidence is computed outside the model.
+- **Tool inputs and evidence:** every tool call is validated centrally; passages below a relevance floor are dropped.
+- **Unsafe actions:** advice that bypasses safety devices, skips lockout, exceeds ratings or ignores alarms is replaced
+  with a safe fallback and forces supervisor approval (rule-based; it cannot judge advice in general).
 - **Access:** tenant-scoped queries, role-gated approval where nobody approves their own diagnosis, append-only audit
-  log, and an authenticated, rate-limited MCP service account ([`docs/mcp.md`](docs/mcp.md)).
-
-## Why this architecture
-
-- **A supervisor with specialists** (documents, sensors, vision, history, maintenance planner) keeps each step's tools
-  and prompt small, and every step observable. The older single tool-loop agent is kept: it is faster and simpler for
-  easy questions.
-- **Hybrid retrieval plus a cross-encoder**, because manuals mix exact terms (part names, limits) with paraphrased
-  symptoms. On 53 questions hybrid beats each method alone, but only by 0.01 to 0.05 MRR, which is within noise for
-  that sample, and the questions were written from the same manual text, which favours keyword matching. The earlier
-  7-question run had dense-only ahead. A large independent corpus is still needed to settle it.
-- **Approval as a graph `interrupt()` stored in Postgres** so a pending decision survives restarts and the model
-  never acts on its own output.
-- **Everything behind one provider switch** (`LLM_PROVIDER`), so the same evaluation runs on a hosted or local model.
+  log, and an authenticated, rate-limited MCP service account.
+- **Supervisor plus specialists** keeps each step's tools and prompt small and observable; the older single tool loop is
+  kept because it is faster for easy questions.
+- **Hybrid retrieval plus a reranker**, because manuals mix exact terms with paraphrased symptoms. Hybrid beats each
+  method alone by only 0.01 to 0.05 MRR, within noise for 53 questions written from the same manual text; a large
+  independent corpus is needed to settle it.
+- **Approval as a graph `interrupt()` stored in Postgres**, so a pending decision survives restarts and the model never
+  acts on its own output. Everything sits behind one provider switch (`LLM_PROVIDER`).
 
 Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.md).
 
 ## Limitations
 
-- The Anthropic path is covered by mocked tests only (no credits were available). Live runs used Groq
-  `gpt-oss-120b` and local Ollama models; Gemini is wired the same way but has not been called.
-- CI fails if the injection screen or BM25 retrieval regress (`tests/test_eval_regression.py`); the LLM-based
-  evaluations and dense/hybrid retrieval are run by hand because they need a provider or the vector store.
-- A real hosted model hit its free-tier daily token cap during testing (the app now honors Retry-After and reports
-  quota exhaustion plainly); the load numbers above deliberately use a fake model.
-- Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off is an unvalidated floor (held-out checks were inconclusive),, and a 7B model judged a 7B model in the RAGAS run.
-- Sensor findings are checked against the retrieved sensor data (metric and stated numbers) and dropped when they do not
-  match; the model's other free text is not. A small local vision model gave shallow image observations.
-- Incident memory is checked on one live scenario (approve a diagnosis, then re-diagnose the same fault: the earlier
-  incident was retrieved on both paths). It embeds up to the 200 most recent approved incidents per workspace on each
-  call, which suits hundreds of incidents, not a large history.
-- Paused approvals are checkpointed in Postgres (verified: pause, restart the backend, resume from a new process).
-  Only the graph's checkpoint format is tied to the installed LangGraph version.
-- No permanent hosted instance: Hugging Face now charges for Docker Spaces, so the demo is a single container shared on
-  demand through a tunnel (`deploy/`).
+- The Anthropic path is covered by mocked tests only (no credits). Live runs used Groq `gpt-oss-120b` and local Ollama
+  models; Gemini is wired the same way but has not been called.
+- CI fails if the injection screen or BM25 retrieval regress; the LLM-based evaluations and dense/hybrid retrieval are
+  run by hand because they need a provider or the vector store.
+- A hosted model hit its free-tier daily token cap during testing (the app honors Retry-After and reports quota
+  exhaustion); the load numbers above deliberately use a fake model.
+- Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off is an unvalidated floor,
+  and a 7B model judged a 7B model in the RAGAS run.
+- Sensor findings are checked against retrieved sensor data and dropped on mismatch; the model's other free text is not.
+  A small local vision model gave shallow image observations.
+- Incident memory was checked on one live scenario and embeds up to the 200 most recent approved incidents per workspace
+  per call, which suits hundreds of incidents, not a large history.
+- Paused approvals are checkpointed in Postgres (verified across a backend restart); the checkpoint format is tied to the
+  installed LangGraph version.
+- No permanent hosted instance: Hugging Face now charges for Docker Spaces, so the demo runs through a tunnel (`deploy/`).
 
 <details>
 <summary>Repo layout, tests and more detail</summary>
 
 - `app/`: FastAPI app (`agents/`, `rag/`, `tools/`, `vision/`, `mcp_server/`, `guardrails.py`); `frontend/`: React SPA;
-  `evaluation/`: retrieval, RAGAS and injection evaluations; `loadtest/`: Locust; `observability/`: Prometheus and Grafana.
-- Tests: `pytest` (backend), run in CI together with `ruff` and the frontend build.
-- Full notes, design decisions and the earlier detailed README: [`docs/detailed-notes.md`](docs/detailed-notes.md),
-  [`docs/architecture-decisions.md`](docs/architecture-decisions.md), [`docs/security.md`](docs/security.md),
-  [`docs/usage-guide.md`](docs/usage-guide.md).
+  `evaluation/`: retrieval, RAGAS and injection evaluations; `loadtest/`: Locust; `observability/`: Prometheus, Grafana.
+- Tests: `pytest` (backend), run in CI with `ruff` and the frontend build.
+- More: [`docs/detailed-notes.md`](docs/detailed-notes.md), [`docs/architecture-decisions.md`](docs/architecture-decisions.md),
+  [`docs/security.md`](docs/security.md), [`docs/usage-guide.md`](docs/usage-guide.md), [`docs/mcp.md`](docs/mcp.md).
 
 </details>
