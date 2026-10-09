@@ -1,0 +1,302 @@
+[
+  {
+    "question": "The machine is shaking more than usual, where do I begin looking?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Troubleshooting > Excessive vibration"
+    ]
+  },
+  {
+    "question": "How shaky is too shaky at the bearing housing before someone should be called?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Troubleshooting > Excessive vibration"
+    ]
+  },
+  {
+    "question": "The windings feel scorching under normal load; what could be behind it?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Troubleshooting > Overheating"
+    ]
+  },
+  {
+    "question": "What clogging should I look for on the outside of a motor that keeps getting too warm?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Troubleshooting > Overheating"
+    ]
+  },
+  {
+    "question": "I hear a scraping, growling sound from the drive end; what is it likely to be?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Troubleshooting > Unusual noise"
+    ]
+  },
+  {
+    "question": "Running at the wrong supply frequency can make which kind of sound?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Troubleshooting > Unusual noise"
+    ]
+  },
+  {
+    "question": "I am swapping a worn bearing on one side only; is that a good idea?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Maintenance > Bearings"
+    ]
+  },
+  {
+    "question": "Is it harmful to pump extra grease into a motor whenever I like?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Maintenance > Lubrication"
+    ]
+  },
+  {
+    "question": "Leftover grease squeezed out after servicing: what do I do with it?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Maintenance > Lubrication"
+    ]
+  },
+  {
+    "question": "How do I prove a motor has no live power before touching its terminals?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Safety"
+    ]
+  },
+  {
+    "question": "Can I run the motor briefly with the covers off to check something?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Safety"
+    ]
+  },
+  {
+    "question": "What do I compare the supply against before the first start-up?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Installation"
+    ]
+  },
+  {
+    "question": "How should the base under the motor be prepared?",
+    "expected_sources": [
+      "electric_motor_manual.pdf:Installation"
+    ]
+  },
+  {
+    "question": "Before I open the casing, what must I do with the valves and the driver?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Safety > Isolation"
+    ]
+  },
+  {
+    "question": "The casing is dripping; how should I treat it and what do I wear?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Safety > Hazardous fluids"
+    ]
+  },
+  {
+    "question": "What tool and tolerance do I use to line up the two shafts?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Installation > Foundation and alignment"
+    ]
+  },
+  {
+    "question": "How should the intake line be routed so air does not get trapped?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Installation > Suction piping"
+    ]
+  },
+  {
+    "question": "Output is weak and the discharge valve is open; what is the first thing to measure?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Troubleshooting > Low flow"
+    ]
+  },
+  {
+    "question": "There is a gravel-rattling sound near the inlet, what should I verify?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Troubleshooting > Cavitation noise"
+    ]
+  },
+  {
+    "question": "How much dripping is tolerable on a brand-new shaft seal?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Troubleshooting > Seal leakage"
+    ]
+  },
+  {
+    "question": "The bearing housing is too hot to touch; which causes should I rule out before restarting?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Troubleshooting > Bearing overheating"
+    ]
+  },
+  {
+    "question": "Can I fit new faces only, or must the whole seal assembly change, and what do I smear on the rubber?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Maintenance > Mechanical seals"
+    ]
+  },
+  {
+    "question": "How much material loss on the blade edges means the rotor part is done?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Maintenance > Impeller inspection"
+    ]
+  },
+  {
+    "question": "How full should the oil sight glass be, and how often is the oil renewed?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Maintenance > Lubrication"
+    ]
+  },
+  {
+    "question": "The unit will sit idle for half a year; what upkeep does it need?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Maintenance > Storage"
+    ]
+  },
+  {
+    "question": "What should the valve positions be when I start a freshly primed unit?",
+    "expected_sources": [
+      "centrifugal_pump_manual.pdf:Maintenance > Startup checks"
+    ]
+  },
+  {
+    "question": "Why can a belt still move after its motor has been switched off?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Safety > Lockout for conveyors"
+    ]
+  },
+  {
+    "question": "Is it acceptable to do a quick test run with a cover missing?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Safety > Guards"
+    ]
+  },
+  {
+    "question": "In what order should I tighten the bolts under the reducer?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Installation > Gearbox mounting"
+    ]
+  },
+  {
+    "question": "How long must I wait after nudging the roller before checking whether the belt centred?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Installation > Belt tracking"
+    ]
+  },
+  {
+    "question": "The belt slides on the drive drum; what are the usual reasons and what is the tension limit?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Troubleshooting > Belt slippage"
+    ]
+  },
+  {
+    "question": "The reducer casing runs hotter than 90 degrees; what should I inspect first?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Troubleshooting > Gearbox overheating"
+    ]
+  },
+  {
+    "question": "Oil seeps out where the shaft exits the reducer; what should I do before changing the seal?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Troubleshooting > Oil leakage"
+    ]
+  },
+  {
+    "question": "How do I measure whether a drive chain has stretched too far?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Troubleshooting > Chain wear"
+    ]
+  },
+  {
+    "question": "Why should the reducer be warm before I drain it?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Maintenance > Gear oil change"
+    ]
+  },
+  {
+    "question": "What lubricant and how many shots do the idler bearings get?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Maintenance > Roller bearings"
+    ]
+  },
+  {
+    "question": "What defects at a joint in the belt need fixing before the next shift?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Maintenance > Belt splice"
+    ]
+  },
+  {
+    "question": "When do I re-tighten the fasteners that hold the reaction bracket?",
+    "expected_sources": [
+      "gearbox_conveyor_manual.pdf:Maintenance > Torque arm"
+    ]
+  },
+  {
+    "question": "Who may change the opening pressure of the relief device?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Safety > Pressure relief"
+    ]
+  },
+  {
+    "question": "What must I do to the tank and its drain before servicing?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Safety > Depressurizing"
+    ]
+  },
+  {
+    "question": "What room temperatures and clearance does the air machine need?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Installation > Location"
+    ]
+  },
+  {
+    "question": "Where does the water that collects in the tank go?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Installation > Condensate drain"
+    ]
+  },
+  {
+    "question": "The tank takes ages to fill; which parts could be at fault, and what signals a dirty inlet element?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Troubleshooting > Slow pressure build-up"
+    ]
+  },
+  {
+    "question": "There is oil mist in the outgoing air; what should I check at the sight glass?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Troubleshooting > Excess oil carryover"
+    ]
+  },
+  {
+    "question": "The outlet air is above 120 degrees; how do I clean the cooler?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Troubleshooting > Compressor overheating"
+    ]
+  },
+  {
+    "question": "It flips between loaded and idle constantly; how can I test for leaks?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Troubleshooting > Frequent cycling"
+    ]
+  },
+  {
+    "question": "How often is the sump oil replaced and which viscosity grade?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Maintenance > Oil change"
+    ]
+  },
+  {
+    "question": "How deep a scratch on a valve disc means it is scrapped?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Maintenance > Valve inspection"
+    ]
+  },
+  {
+    "question": "How far should the drive belt give when pressed in the middle?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Maintenance > Belt tension"
+    ]
+  },
+  {
+    "question": "How frequently must a qualified person examine the pressure vessel?",
+    "expected_sources": [
+      "air_compressor_manual.pdf:Maintenance > Receiver inspection"
+    ]
+  }
+]

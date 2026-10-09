@@ -26,6 +26,7 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 | Metric | Result | Dataset and method |
 |---|---|---|
 | Retrieval MRR (recall@1) | BM25 0.939 (0.906), dense 0.903 (0.849), hybrid 0.953 (0.925), hybrid + rerank 0.969 (0.962) | 53 labelled questions over 4 manuals (45 chunks; 3 are synthetic), `python -m evaluation.retrieval_ablation` |
+| Retrieval, paraphrased questions | MRR: BM25 0.568, dense 0.790, hybrid 0.706, hybrid + rerank 0.670 with the -4.0 relevance floor (recall@5 0.68) and 0.847 without it | 50 questions written to share few words with the manual, same 45 chunks, `python -m evaluation.retrieval_ablation data/evaluation/retrieval_questions_paraphrase.json` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
 | Answer quality, tool-loop agent | fact coverage 0.91, citation precision 0.91, overconfident on 2/8 unanswerable questions, unsupported numbers in 1/24 answers | 24 questions (16 answerable, 8 not) on the sample manual, Groq `gpt-oss-20b`, deterministic scoring (`python -m evaluation.answer_eval`); relevance cut-off -4.0 at the time; without it, overconfident on 3/3 unanswerable questions (a different model, `gpt-oss-120b`). The cut-off is now a conservative -4.0 floor (see the engineering benchmarks); re-run pending |
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
@@ -126,6 +127,7 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
   run by hand because they need a provider or the vector store.
 - A hosted model hit its free-tier daily token cap during testing (the app honors Retry-After and reports quota
   exhaustion); the load numbers above deliberately use a fake model.
+- On paraphrased questions the -4.0 relevance floor drops the right passage for about a third of queries (see Key results), so the floor trades recall for fewer irrelevant passages and is not validated.
 - Evaluation sets are tiny (24 to 53 questions, 116 synthetic attacks), the relevance cut-off is an unvalidated floor,
   and a 7B model judged a 7B model in the RAGAS run.
 - Sensor findings are checked against retrieved sensor data and dropped on mismatch; the model's other free text is not.

@@ -1,6 +1,6 @@
 """Retrieval component ablation.
 
-    python -m evaluation.retrieval_ablation
+    python -m evaluation.retrieval_ablation [questions.json]
 
 Answers "does each retrieval component actually contribute?" by running
 the SAME ground-truth question set (data/evaluation/rag_questions.json)
@@ -127,7 +127,8 @@ def _source_key_from_row(row) -> str:
 
 
 async def run() -> dict:
-    questions = json.loads(QUESTIONS_PATH.read_text())
+    questions_path = Path(sys.argv[1]) if len(sys.argv) > 1 else QUESTIONS_PATH
+    questions = json.loads(questions_path.read_text())
 
     async with AsyncSessionLocal() as db:
         user = await _ensure_eval_user(db)
