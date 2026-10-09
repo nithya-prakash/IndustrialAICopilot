@@ -25,7 +25,7 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 
 | Metric | Result | Dataset and method |
 |---|---|---|
-| Retrieval MRR (recall@1) | BM25 0.939 (0.906), dense 0.903 (0.849), hybrid 0.953 (0.925), hybrid + rerank 0.950 (0.943) | 53 labelled questions over 4 manuals (45 chunks; 3 are synthetic), `python -m evaluation.retrieval_ablation` |
+| Retrieval MRR (recall@1) | BM25 0.939 (0.906), dense 0.903 (0.849), hybrid 0.953 (0.925), hybrid + rerank 0.969 (0.962) | 53 labelled questions over 4 manuals (45 chunks; 3 are synthetic), `python -m evaluation.retrieval_ablation` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
 | Answer quality, tool-loop agent | fact coverage 0.91, citation precision 0.91, overconfident on 2/8 unanswerable questions, unsupported numbers in 1/24 answers | 24 questions (16 answerable, 8 not) on the sample manual, Groq `gpt-oss-20b`, deterministic scoring (`python -m evaluation.answer_eval`); relevance cut-off -4.0 at the time; without it, overconfident on 3/3 unanswerable questions (a different model, `gpt-oss-120b`). The cut-off is now a conservative -4.0 floor (see the engineering benchmarks); re-run pending |
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
