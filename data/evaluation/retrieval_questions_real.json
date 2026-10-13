@@ -1,0 +1,507 @@
+[
+ {
+  "question": "How far can a pump's efficiency fall before it gets replaced?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "10% to 25%"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What efficiency figures are common in industrial pumps, according to the DOE study?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "50% to 60%"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which kinds of flow meters can be used when testing a pump's efficiency?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "transit time"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Where in the piping should I measure flow to avoid turbulence?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "straight run of pipe"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What causes internal leakage that lowers a pump's efficiency?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "excessive impeller clearances"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Which worn parts should be replaced or refurbished to restore a pump's efficiency?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "wear rings"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How much energy would be saved by restoring a 300 hp pump running at 55% back to its 78% design efficiency?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "415,769"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What is the yearly cost saving from fixing the 300 horsepower pump in the efficiency test example?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "20,786"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How far off the best efficiency point should a pump's flow be before I flag it for review?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "30% or more from the BEP"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which Hydraulic Institute standard covers centrifugal pump tests?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "ANSI/HI 1.6-2000"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Which flow is subtracted from the pump flow when computing system efficiency?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "recirculation flow"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which software can estimate optimal efficiency and account for artificial head and flow losses?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "artificial head and flow"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What are the three classes of centrifugal pumps?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "radial flow, mixed flow"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What happens to a centrifugal pump's flow rate as the head it supplies drops?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "flow rate increases as the head decreases"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What does the pump curve say about suction requirements?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "net positive suction head"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Where on the curve does a centrifugal pump run most cost effectively?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "close to the BEP"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How close should the system curve cross the pump curve relative to the BEP to minimize energy use?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "within 20% of its"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Why choose a midrange impeller when buying a pump?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "midrange"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What index is useful for comparing two pumps in the same application?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "useful index"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "By how many brake horsepower does picking the 81% efficient pump over the 78% one reduce power in the example?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "27 bhp"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How many kWh per year are saved by choosing the more efficient 15,000 gpm pump?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "167,850"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What is the simple payback period for the more efficient pump in the example?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "approximately 7 months"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Why is routine wear low in centrifugal pumps?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "few moving parts"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What lifetime did the pump selection example assume?",
+  "source_file": "efficient_centrifug_pumps.pdf",
+  "evidence": [
+   "15-year pump life"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Why do pumping systems often run inefficiently compared with their original design?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "original design conditions"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Why might oversized pumps have been installed in the first place?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "future increases in plant"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "At what level of imbalance should I carry out a detailed review of the pumping system?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "exceeds 20%"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How is the percentage imbalance between measured and required conditions calculated?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "Imbalance (%)"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What signs show a pump is incorrectly sized for current needs?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "incorrectly sized for current needs"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What are pony pumps and how do they help?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "pony"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which motor speed change is suggested instead of 1,800 rpm?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "1,200 revolutions per minute"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Why are quick periodic reviews especially useful in multipump systems?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "multipump systems"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How much refrigeration does the chilled water process need outside the summer months?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "425 tons"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What size replacement pump is used in the chilled water example?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "1,250-gpm"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How many kWh per year does the smaller replacement pump save in the chilled water example?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "790,520"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What annual dollar savings result from replacing one oversized chilled water pump?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "39,525"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Besides lowering flow and pressure, how else can pumping energy costs be cut?",
+  "source_file": "match_pumps_to_system.pdf",
+  "evidence": [
+   "shorter period of time"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What share of a typical facility's electricity cost goes to pumping?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "16% of a typical facility"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How does the power needed to overcome static head change with flow?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "varies linearly with flow"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What pipe characteristics affect the frictional power required?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "surface roughness"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "By how much can epoxy-coated or plastic pipe reduce the friction factor?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "more than 40%"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What is the annual pumping cost with 6-inch pipe for 10,000 feet at 600 gpm?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "16,900"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What does the 8-inch pipe option cost per year for the 600 gpm example?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "4,250"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Why might a larger and pricier pipe still be the most cost-effective choice?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "up-front cost of a larger pipe"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What is the typical range of the friction factor for most applications?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "0.0225"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What efficiency and electricity rate were assumed in the pipe cost figure?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "Combined pump and motor efficiency"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How many pipe sizes should I evaluate when friction head dominates?",
+  "source_file": "reduce_pumping_costs.pdf",
+  "evidence": [
+   "at least two pipe sizes"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What fraction of motor failures are caused by bearings?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "two-thirds of all motor failures"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How can bearing problems be caught before they damage the motor?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "Vibration trending and thermal scanning"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How does a 10 degree Celsius temperature rise affect insulation life?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "reduced by half"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How is a bearing's L10 life defined?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "sufficiently large group of apparently identical bearings"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What is a bearing's median life relative to its calculated rating life?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "about five times"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which electrical conditions weaken motor insulation over time?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "voltage unbalance"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What conditions contribute to motor overheating?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "poor ventilation"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What lubrication mistakes shorten bearing service life?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "excessive lubricant use"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How many operating hours do manufacturers estimate for motor life?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "40,000 hours"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "When should the smallest, cheapest standard motors be replaced?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "smallest and least expensive"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What should I ask a motor repair service center to do after a failure?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "failure analysis"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What happens to winding life when the thermal class is raised from Class B to Class H during a rewind?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "Class H (180"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What limits does the NEMA MG1 standard define for motor operation?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "frequency of starts"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How should out-of-service motors be protected while stored?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "humidity, vibration,",
+   "corrosion exposure"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Can adjustable speed drives cause early bearing failure?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "bearing currents"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Up to what horsepower are standard motors usually scrapped after a winding failure?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "20 or 50 horsepower"
+  ],
+  "kind": "paraphrase"
+ }
+]

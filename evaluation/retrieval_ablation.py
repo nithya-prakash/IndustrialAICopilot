@@ -24,6 +24,7 @@ Requires a live Postgres+Qdrant with the sample manual indexed under the
 """
 import asyncio
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -65,8 +66,8 @@ CONFIGS = {
 
 async def _retrieve(
     db, query: str, *, tenant_id: str, use_dense: bool, use_bm25: bool, use_rerank: bool
-) -> list[str]:
-    """Returns retrieved chunk source-keys, best-first — same composition
+) -> list:
+    """Returns retrieved chunk rows, best-first — same composition
     app.rag.retrieval.hybrid_search uses, with each stage toggleable."""
     settings = get_settings()
     rows = await _fetch_candidates(
@@ -116,7 +117,7 @@ async def _retrieve(
     else:
         ordered_ids = candidate_ids[:TOP_K]
 
-    return [_source_key_from_row(rows_by_id[cid]) for cid in ordered_ids]
+    return [rows_by_id[cid] for cid in ordered_ids]
 
 
 def _source_key_from_row(row) -> str:
@@ -124,6 +125,35 @@ def _source_key_from_row(row) -> str:
     if row.subsection:
         heading = f"{heading} > {row.subsection}"
     return f"{row.original_filename}:{heading}"
+
+
+def _norm(text: str) -> str:
+    """Lowercase, straighten curly quotes, collapse whitespace (for evidence matching)."""
+    text = text.replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+    return re.sub(r"\s+", " ", text).lower()
+
+
+def _keys_for_item(rows: list, item: dict, index: int) -> tuple[list[str], set[str]]:
+    """Maps retrieved rows to comparable keys, and returns (retrieved keys, relevant set).
+
+    Section-labelled questions (``expected_sources``) compare "file:Section > Subsection" labels.
+    Evidence-anchored questions (``source_file`` + ``evidence``) are for real PDFs whose extracted
+    section labels are unreliable (two-column layouts): a chunk is relevant when it comes from
+    ``source_file`` and contains every evidence phrase, so the score does not depend on headings.
+    """
+    if "evidence" not in item:
+        return [_source_key_from_row(r) for r in rows], set(item["expected_sources"])
+    hit_key = f"EVIDENCE:{index}"
+    phrases = [_norm(e) for e in item["evidence"]]
+    keys: list[str] = []
+    for row in rows:
+        is_hit = row.original_filename == item["source_file"] and all(
+            p in _norm(row.content) for p in phrases
+        )
+        if is_hit and hit_key in keys:
+            continue  # count the evidence once, so duplicates cannot inflate nDCG
+        keys.append(hit_key if is_hit else _source_key_from_row(row))
+    return keys, {hit_key}
 
 
 async def run() -> dict:
@@ -139,10 +169,11 @@ async def run() -> dict:
         all_retrieved: list[list[str]] = []
         all_relevant: list[set[str]] = []
         async with AsyncSessionLocal() as db:
-            for item in questions:
-                retrieved = await _retrieve(db, item["question"], tenant_id=EVAL_TENANT, **flags)
+            for index, item in enumerate(questions):
+                rows = await _retrieve(db, item["question"], tenant_id=EVAL_TENANT, **flags)
+                retrieved, relevant = _keys_for_item(rows, item, index)
                 all_retrieved.append(retrieved)
-                all_relevant.append(set(item["expected_sources"]))
+                all_relevant.append(relevant)
 
         pairs = list(zip(all_retrieved, all_relevant, strict=True))
 

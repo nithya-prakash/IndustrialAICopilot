@@ -167,3 +167,98 @@ def test_pattern_heading_level_not_overridden_by_unrelated_size_headings(
     assert size_heading.level == 1
     assert pattern_heading.level == 2
     assert pattern_heading.level_source == "pattern"
+
+
+# --- Multi-column layouts -------------------------------------------------------------------
+
+LEFT_SENTENCE = (
+    "Check the shaft alignment before restarting the motor, because even a small angular error "
+    "will overload the bearings and shorten their service life considerably."
+)
+RIGHT_SENTENCE = (
+    "Record the inlet pressure at every shift change, since a gradual drop usually points to a "
+    "partly blocked strainer long before the pump starts to cavitate audibly."
+)
+
+
+def _two_column_pdf(path: Path, *, with_full_width_title: bool) -> Path:
+    from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, PageTemplate
+
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10)
+    width, height = LETTER
+    margin, gap = 50, 30
+    column_width = (width - 2 * margin - gap) / 2
+    body_top = height - margin - (60 if with_full_width_title else 0)
+    frames = [
+        Frame(margin, margin, column_width, body_top - margin, id="left"),
+        Frame(margin + column_width + gap, margin, column_width, body_top - margin, id="right"),
+    ]
+    doc = BaseDocTemplate(str(path), pagesize=LETTER)
+    doc.addPageTemplates([PageTemplate(id="two", frames=frames)])
+
+    story = []
+    if with_full_width_title:
+        # A title that spans both columns sits above the frames, drawn on the canvas.
+        def draw_title(canvas, _doc) -> None:
+            canvas.setFont("Helvetica-Bold", 20)
+            canvas.drawString(margin, height - margin - 20, "Maintenance Tip Sheet")
+
+        doc.pageTemplates[0].onPage = draw_title
+    story += [Paragraph(LEFT_SENTENCE + " " + LEFT_SENTENCE, body), FrameBreak()]
+    story += [Paragraph(RIGHT_SENTENCE + " " + RIGHT_SENTENCE, body)]
+    doc.build(story)
+    return path
+
+
+def _joined_text(result) -> str:
+    return " ".join(b.text for b in result.blocks)
+
+
+def test_two_column_page_is_read_column_by_column(tmp_path: Path) -> None:
+    result = extract_pdf(_two_column_pdf(tmp_path / "cols.pdf", with_full_width_title=False))
+    text = _joined_text(result)
+    # Each sentence survives intact, i.e. the columns were not interleaved line by line.
+    assert LEFT_SENTENCE in text
+    assert RIGHT_SENTENCE in text
+    assert text.index(LEFT_SENTENCE) < text.index(RIGHT_SENTENCE)
+
+
+def test_full_width_title_stays_before_the_columns(tmp_path: Path) -> None:
+    result = extract_pdf(_two_column_pdf(tmp_path / "cols_title.pdf", with_full_width_title=True))
+    text = _joined_text(result)
+    assert text.index("Maintenance Tip Sheet") < text.index(LEFT_SENTENCE)
+    assert LEFT_SENTENCE in text
+    assert RIGHT_SENTENCE in text
+
+
+def test_hanging_indent_bullets_are_not_split_into_columns(tmp_path: Path) -> None:
+    styles = getSampleStyleSheet()
+    bullet = ParagraphStyle(
+        "Bullet", parent=styles["BodyText"], fontSize=10, leftIndent=30, bulletIndent=0
+    )
+    path = tmp_path / "bullets.pdf"
+    SimpleDocTemplate(str(path), pagesize=LETTER).build(
+        [
+            Paragraph(
+                f"Step number {n} requires isolating the supply and tagging the valve.",
+                bullet,
+                bulletText="•",
+            )
+            for n in range(12)
+        ]
+    )
+    texts = [b.text for b in extract_pdf(path).blocks if b.block_type == "text"]
+    assert len(texts) == 12
+    assert all("isolating the supply and tagging the valve" in t for t in texts)
+
+
+def test_a_wide_gap_with_too_little_text_is_not_a_column(tmp_path: Path) -> None:
+    # A short right-hand note beside a long paragraph must not turn the page into two columns.
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10)
+    path = tmp_path / "note.pdf"
+    SimpleDocTemplate(str(path), pagesize=LETTER, rightMargin=250).build(
+        [Paragraph(LEFT_SENTENCE + " " + LEFT_SENTENCE, body)]
+    )
+    assert LEFT_SENTENCE in _joined_text(extract_pdf(path))

@@ -311,6 +311,10 @@ extensions this project could reasonably grow into, not commitments:
   structure in inconsistently formatted documents. OCR'd pages have no font
   metadata at all, so heading detection there falls back to a weaker
   text-pattern heuristic (numbered/ALL-CAPS headings).
+- Multi-column pages are split at vertical gutters (`_find_column_bands` in `app/ingestion/pdf_extractor.py`): a run
+  of text lines is treated as columns only when a gutter of at least 12 pt separates blocks that each hold 4+ lines and
+  80+ characters. Full-width titles and footers stay in reading order; single-column pages take the original path.
+  Tables, text boxes and figures are not modelled, and repeated boilerplate is not removed.
 - BM25 is built in memory from the tenant-scoped candidate set in Postgres
   and cached per process for 60 seconds, rather than kept as a persistent
   keyword index — fine at portfolio scale, documented as a scaling

@@ -16,6 +16,13 @@ the same size as body text (a real, common inconsistency, not just a
 scanned-page problem) isn't missed entirely. Genuine layout-ML structure
 detection is still a real, larger improvement this doesn't attempt — see
 docs/architecture-decisions.md.
+
+Multi-column pages (a sidebar beside the body, two-column articles) are read
+column by column: pdfplumber's line grouping otherwise joins the left and
+right column text that share a baseline into one line, interleaving two
+unrelated sentences. `_find_column_bands` finds runs of text that share a
+vertical gutter, and only those runs are split; full-width text (titles,
+footers) and ordinary single-column pages take the original code path.
 """
 
 import re
@@ -32,6 +39,13 @@ MAX_HEADING_CHARS = 90
 MAX_ALL_CAPS_HEADING_CHARS = 60
 
 NUMBERED_HEADING_RE = re.compile(r"^(\d+(?:\.\d+)*)\s+(\S.+)$")
+
+# Column detection. A gutter is a vertical strip with no text across a run of
+# lines. These are deliberately conservative: a false split reorders text,
+# while a missed one only leaves the page as it was before this detection.
+COLUMN_MIN_GUTTER_PT = 12.0  # wider than any word space or hanging bullet indent
+COLUMN_MIN_LINES = 4  # each column must hold at least this many text lines ...
+COLUMN_MIN_CHARS = 80  # ... and at least this many characters
 
 
 def text_pattern_heading_level(text: str) -> int | None:
@@ -112,10 +126,7 @@ def _detect_body_font_size(pdf) -> float:
 def _extract_page_blocks(
     page, page_number: int, body_size: float
 ) -> tuple[list[ExtractedBlock], int]:
-    try:
-        lines = page.extract_text_lines(layout=False, strip=True) or []
-    except Exception:
-        lines = []
+    lines = _page_text_lines(page)
 
     blocks: list[ExtractedBlock] = []
     char_count = 0
@@ -150,6 +161,153 @@ def _extract_page_blocks(
             blocks.append(ExtractedBlock(page_number, "text", 0, text, avg_size))
 
     return blocks, char_count
+
+
+def _text_lines(page_or_crop) -> list[dict]:
+    try:
+        return page_or_crop.extract_text_lines(layout=False, strip=True) or []
+    except Exception:
+        return []
+
+
+def _page_text_lines(page) -> list[dict]:
+    """Text lines in reading order, splitting multi-column bands into columns."""
+    try:
+        bands = _find_column_bands(page)
+    except Exception:
+        bands = []
+    if not bands:
+        return _text_lines(page)
+
+    x0, top, x1, bottom = page.bbox
+    lines: list[dict] = []
+    cursor = top
+    for band_top, band_bottom, cuts in bands:
+        if band_top > cursor:
+            lines.extend(_text_lines(page.within_bbox((x0, cursor, x1, band_top))))
+        edges = [x0, *cuts, x1]
+        for left, right in zip(edges, edges[1:], strict=False):
+            lines.extend(_text_lines(page.within_bbox((left, band_top, right, band_bottom))))
+        cursor = band_bottom
+    if cursor < bottom:
+        lines.extend(_text_lines(page.within_bbox((x0, cursor, x1, bottom))))
+    return lines
+
+
+def _find_column_bands(page) -> list[tuple[float, float, list[float]]]:
+    """Finds runs of text blocks that share vertical gutters.
+
+    Returns (top, bottom, gutter x-positions) bands, top to bottom; empty when
+    the page is a single column. Text is first cut into blocks at fully blank
+    horizontal strips. A band is then the longest run of consecutive blocks
+    whose combined footprint still leaves at least one gutter with real text
+    on every side, so a full-width title or footer (which crosses the gutter)
+    ends or precedes a band instead of joining it.
+    """
+    chars = [c for c in page.chars if c.get("text", "").strip()]
+    if not chars:
+        return []
+    x_origin = min(c["x0"] for c in chars)
+    blocks = _text_blocks(chars)
+    masks = [_occupancy(block_chars, x_origin) for block_chars in blocks]
+    extents = [(min(c["top"] for c in b), max(c["bottom"] for c in b)) for b in blocks]
+
+    bands: list[tuple[float, float, list[float]]] = []
+    i = 0
+    while i < len(blocks):
+        best_end, best_cuts = None, None
+        footprint = 0
+        for j in range(i, len(blocks)):
+            footprint |= masks[j]
+            cuts = _valid_gutters(footprint, [c for b in blocks[i : j + 1] for c in b], x_origin)
+            if cuts:
+                best_end, best_cuts = j, cuts
+            elif best_end is not None or _no_gutter_possible(footprint):
+                break
+        if best_end is None:
+            i += 1
+            continue
+        # Cut halfway through the blank strip on each side, so no character straddles an edge.
+        band_top = extents[i][0]
+        band_bottom = extents[best_end][1]
+        above = extents[i - 1][1] if i > 0 else page.bbox[1]
+        below = extents[best_end + 1][0] if best_end + 1 < len(blocks) else page.bbox[3]
+        bands.append(((above + band_top) / 2, (band_bottom + below) / 2, best_cuts))
+        i = best_end + 1
+    return bands
+
+
+def _no_gutter_possible(footprint: int) -> bool:
+    """True once the combined footprint leaves no interior gap wide enough to be a gutter."""
+    return not _gaps(footprint)
+
+
+def _text_blocks(chars: list[dict]) -> list[list[dict]]:
+    """Groups characters into blocks separated by fully blank horizontal strips."""
+    ordered = sorted(chars, key=lambda c: c["top"])
+    blocks: list[list[dict]] = []
+    current: list[dict] = []
+    current_bottom = float("-inf")
+    for char in ordered:
+        if current and char["top"] > current_bottom:
+            blocks.append(current)
+            current = []
+            current_bottom = float("-inf")
+        current.append(char)
+        current_bottom = max(current_bottom, char["bottom"])
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def _occupancy(chars: list[dict], x_origin: float) -> int:
+    """Bitmask with one bit per point of x that some character covers."""
+    mask = 0
+    for char in chars:
+        left = max(int(char["x0"] - x_origin), 0)
+        right = max(int(char["x1"] - x_origin) + 1, left + 1)
+        mask |= ((1 << (right - left)) - 1) << left
+    return mask
+
+
+def _gaps(footprint: int) -> list[tuple[int, int]]:
+    """Interior blank runs (start, end) of at least COLUMN_MIN_GUTTER_PT in the footprint."""
+    if footprint == 0:
+        return []
+    width = footprint.bit_length()
+    gaps: list[tuple[int, int]] = []
+    run_start = None
+    for x in range(width):
+        if footprint >> x & 1:
+            if run_start is not None and x - run_start >= COLUMN_MIN_GUTTER_PT:
+                gaps.append((run_start, x))
+            run_start = None
+        elif run_start is None:
+            run_start = x
+    return [(a, b) for a, b in gaps if a > 0]
+
+
+def _valid_gutters(footprint: int, chars: list[dict], x_origin: float) -> list[float]:
+    """Gutter x-positions for which every resulting column holds real text lines.
+
+    Starts from every gap in the footprint and drops the narrowest one until
+    each column has COLUMN_MIN_LINES lines and COLUMN_MIN_CHARS characters.
+    """
+    gaps = _gaps(footprint)
+    while gaps:
+        cuts = [x_origin + (a + b) / 2 for a, b in gaps]
+        edges = [float("-inf"), *cuts, float("inf")]
+        columns = [
+            [c for c in chars if c["x0"] >= left and c["x1"] <= right]
+            for left, right in zip(edges, edges[1:], strict=False)
+        ]
+        if all(
+            len(col) >= COLUMN_MIN_CHARS and len({round(c["top"]) for c in col}) >= COLUMN_MIN_LINES
+            for col in columns
+        ):
+            return cuts
+        gaps.remove(min(gaps, key=lambda g: g[1] - g[0]))
+    return []
 
 
 def _drop_document_title(blocks: list[ExtractedBlock]) -> None:
