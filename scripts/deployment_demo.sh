@@ -31,11 +31,12 @@ banner "4. Upload a real public manual (DOE motor-systems tip sheet): extract, c
 DOC=$(curl -s -X POST $API/documents/upload -H "Authorization: Bearer $TOKEN" \
   -F "file=@data/manuals/eval/extend_motor_operlife_motor_systemts3.pdf;type=application/pdf" \
   -F "equipment_type=hydraulic_system" -F "equipment_id=HYDRAULIC-001" | field "d['id']")
+echo "  processing..."
 for i in $(seq 1 30); do
-  curl -s $API/documents/$DOC -H "Authorization: Bearer $TOKEN" | field "d['status'] + ', ' + str(d['chunk_count']) + ' chunks, ' + str(d['page_count']) + ' pages'" | sed 's/^/  /'
   curl -s $API/documents/$DOC -H "Authorization: Bearer $TOKEN" | field "d['status']" | grep -q ready && break
   sleep 2
 done
+curl -s $API/documents/$DOC -H "Authorization: Bearer $TOKEN" | field "d['status'] + ', ' + str(d['chunk_count']) + ' chunks, ' + str(d['page_count']) + ' pages'" | sed 's/^/  /'
 pause 3
 
 banner "5. Load real sensor history from a hydraulic test rig (UCI, CC BY 4.0) and analyse it"
