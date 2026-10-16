@@ -16,10 +16,6 @@ high-severity results are held for a supervisor to approve.
 
 *Recorded against the local stack with a real model (Groq `gpt-oss-20b`); the [older recording](docs/images/supervisor-demo.gif) shows a low-confidence result being held and rejected.*
 
-![Demo: real hydraulic test-rig recordings are loaded and checked against the rig's known component conditions](docs/images/sensor-demo.gif)
-
-*Recorded 2026-10-16 with `scripts/sensor_demo.sh`: the real sensor history is seeded, then `evaluation.sensor_fault_eval` shows which faults the baseline checks can and cannot detect.*
-
 **Status: v1.0, evaluation work in progress.** Known gaps are listed under Limitations: no permanent hosted instance,
 small evaluation sets (real-document sets added 2026-10-13 and 2026-10-16), and untested Gemini/OpenAI and vLLM paths.
 The PDF extractor now reads multi-column pages column by column ([before/after](docs/real-document-evaluation.md)).

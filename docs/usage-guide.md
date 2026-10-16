@@ -96,6 +96,10 @@ page number, and equipment metadata.
 
 ## Try the sensor pipeline
 
+![Demo: real hydraulic test-rig recordings are loaded and checked against the rig's known component conditions](images/sensor-demo.gif)
+
+*Recorded 2026-10-16 with `scripts/sensor_demo.sh`: the real sensor history is seeded, then `evaluation.sensor_fault_eval` shows which faults the baseline checks can and cannot detect.*
+
 ```bash
 docker compose run --rm backend python scripts/seed_sensor_data.py acme
 ```
