@@ -23,6 +23,13 @@ right column text that share a baseline into one line, interleaving two
 unrelated sentences. `_find_column_bands` finds runs of text that share a
 vertical gutter, and only those runs are split; full-width text (titles,
 footers) and ordinary single-column pages take the original code path.
+
+Publisher boilerplate (the "About DOE's Industrial Technologies Program" block and the "PLEASE
+CONTACT"
+panel that close every DOE tip sheet) is dropped before chunking: it names the same program and
+contact
+details on every sheet, so it matches almost any query about "program", "energy" or "information"
+and crowds real content out of the top results.
 """
 
 import re
@@ -39,6 +46,17 @@ MAX_HEADING_CHARS = 90
 MAX_ALL_CAPS_HEADING_CHARS = 60
 
 NUMBERED_HEADING_RE = re.compile(r"^(\d+(?:\.\d+)*)\s+(\S.+)$")
+
+# A block starting like this opens a publisher's closing panel (about-the-program text, contact
+# details,
+# slogans, report numbers). It and everything after it on the same page is dropped. Anchored to the
+# start
+# of a line and deliberately specific: a generic word such as "Contact" must never end a page's
+# content.
+BOILERPLATE_START_RE = re.compile(
+    r"^(About DOE.s\b|PLEASE CONTACT\b|Energy Efficiency and Renewable Energy\s*$|DOE/GO-\d)",
+    re.IGNORECASE,
+)
 
 # Column detection. A gutter is a vertical strip with no text across a run of
 # lines. These are deliberately conservative: a false split reorders text,
@@ -96,9 +114,12 @@ def extract_pdf(path: Path) -> ExtractionResult:
 
         for page_number, page in enumerate(pdf.pages, start=1):
             page_blocks, char_count = _extract_page_blocks(page, page_number, body_size)
+            # pdfplumber keeps every parsed character; a 300-page guide needs gigabytes
+            page.flush_cache()
             blocks.extend(page_blocks)
             chars_per_page[page_number] = char_count
 
+        _drop_publisher_boilerplate(blocks)
         _drop_document_title(blocks)
         _assign_heading_levels(blocks)
 
@@ -117,10 +138,13 @@ def extract_pdf(path: Path) -> ExtractionResult:
 
 
 def _detect_body_font_size(pdf) -> float:
-    sizes = [round(c["size"]) for page in pdf.pages for c in page.chars if c.get("size")]
-    if not sizes:
+    counts: Counter = Counter()
+    for page in pdf.pages:
+        counts.update(round(c["size"]) for c in page.chars if c.get("size"))
+        page.flush_cache()
+    if not counts:
         return 10.0
-    return float(Counter(sizes).most_common(1)[0][0])
+    return float(counts.most_common(1)[0][0])
 
 
 def _extract_page_blocks(
@@ -308,6 +332,24 @@ def _valid_gutters(footprint: int, chars: list[dict], x_origin: float) -> list[f
             return cuts
         gaps.remove(min(gaps, key=lambda g: g[1] - g[0]))
     return []
+
+
+def _drop_publisher_boilerplate(blocks: list[ExtractedBlock]) -> None:
+    """Remove each page's closing publisher panel: from the first block matching
+    BOILERPLATE_START_RE to
+    the end of that page. Text before the marker on the same page, and all other pages, are
+    untouched."""
+    dropped_from: dict[int, int] = {}
+    for i, block in enumerate(blocks):
+        if block.page_number not in dropped_from and BOILERPLATE_START_RE.match(block.text):
+            dropped_from[block.page_number] = i
+    if not dropped_from:
+        return
+    blocks[:] = [
+        b
+        for i, b in enumerate(blocks)
+        if b.page_number not in dropped_from or i < dropped_from[b.page_number]
+    ]
 
 
 def _drop_document_title(blocks: list[ExtractedBlock]) -> None:

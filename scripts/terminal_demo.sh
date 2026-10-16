@@ -41,9 +41,9 @@ for i in 1 2 3 4 5 6 7 8; do
 done
 pause 3
 
-banner "4. Seed sensor history and pull real analytics — trend, anomalies, threshold check, all computed"
+banner "4. Seed real hydraulic-rig sensor history and pull analytics — trend, anomalies, threshold check, all computed"
 docker compose run --rm backend python scripts/seed_sensor_data.py acme
-curl -s "localhost:8000/api/v1/sensors/MOTOR-001/analysis?metric=vibration_rms&start_time=2026-08-09T00:00:00Z&end_time=2026-08-23T00:00:00Z" \
+curl -s "localhost:8000/api/v1/sensors/HYDRAULIC-001/analysis?metric=cooling_efficiency&start_time=2026-08-09T00:00:00Z&end_time=2026-08-10T13:00:00Z" \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 pause 4
 

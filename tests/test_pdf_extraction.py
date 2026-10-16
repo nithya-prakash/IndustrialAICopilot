@@ -262,3 +262,48 @@ def test_a_wide_gap_with_too_little_text_is_not_a_column(tmp_path: Path) -> None
         [Paragraph(LEFT_SENTENCE + " " + LEFT_SENTENCE, body)]
     )
     assert LEFT_SENTENCE in _joined_text(extract_pdf(path))
+
+
+def _boilerplate_pdf(path: Path, closing_heading: str) -> Path:
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10)
+    SimpleDocTemplate(str(path), pagesize=LETTER).build(
+        [
+            Paragraph("Check the pump seal weekly for leaks and record what you find.", body),
+            Paragraph(closing_heading, body),
+            Paragraph("Call the information center at 1-877-000-0000 or visit www.example.gov.",
+            body),
+            Paragraph("DOE/GO-102005-2160", body),
+        ]
+    )
+    return path
+
+
+def test_publisher_closing_panel_is_dropped(tmp_path: Path) -> None:
+    pdf = _boilerplate_pdf(tmp_path / "doe.pdf", "About DOE's Industrial Technologies Program")
+    result = extract_pdf(pdf)
+    text = _joined_text(result)
+    assert "pump seal weekly" in text
+    assert "information center" not in text
+    assert "DOE/GO-102005-2160" not in text
+    assert "About DOE" not in text
+
+
+def test_please_contact_panel_is_dropped(tmp_path: Path) -> None:
+    result = extract_pdf(_boilerplate_pdf(tmp_path / "contact.pdf", "PLEASE CONTACT:"))
+    assert "pump seal weekly" in _joined_text(result)
+    assert "1-877" not in _joined_text(result)
+
+
+def test_ordinary_contact_text_is_kept(tmp_path: Path) -> None:
+    result = extract_pdf(_boilerplate_pdf(tmp_path / "plain.pdf", "Technician notes"))
+    text = _joined_text(result)
+    assert "information center" in text
+
+
+def test_report_number_footer_is_dropped(tmp_path: Path) -> None:
+    pdf = _boilerplate_pdf(tmp_path / "report.pdf", "DOE/GO-102012-3735 - November 2012")
+    result = extract_pdf(pdf)
+    text = _joined_text(result)
+    assert "pump seal weekly" in text
+    assert "information center" not in text

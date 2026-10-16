@@ -20,17 +20,16 @@ def ocr_pages(path: Path, page_numbers: list[int]) -> list[ExtractedBlock]:
     if not page_numbers:
         return []
 
-    first_page, last_page = min(page_numbers), max(page_numbers)
-    images = convert_from_path(str(path), first_page=first_page, last_page=last_page)
-    wanted = set(page_numbers)
-
+    # One page at a time: rendering the whole span from the first to the last scanned page held
+    # every
+    # page in between as an image, which ran a 321-page guide with scanned pages 4 and 321 out of
+    # memory.
     blocks: list[ExtractedBlock] = []
-    for offset, image in enumerate(images):
-        page_number = first_page + offset
-        if page_number not in wanted:
-            continue
-        text = pytesseract.image_to_string(image)
-        blocks.extend(_classify_lines(text, page_number))
+    for page_number in sorted(set(page_numbers)):
+        images = convert_from_path(str(path), first_page=page_number, last_page=page_number)
+        for image in images:
+            text = pytesseract.image_to_string(image)
+            blocks.extend(_classify_lines(text, page_number))
     return blocks
 
 

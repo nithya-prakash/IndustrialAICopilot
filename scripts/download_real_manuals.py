@@ -1,9 +1,12 @@
-"""Downloads the five real public documents used by data/evaluation/retrieval_questions_real.json.
+"""Downloads the six real public documents used by data/evaluation/retrieval_questions_real.json
+(five DOE tip sheets) and retrieval_questions_om_guide.json (the PNNL/DOE O&M Best Practices Guide).
 
     python scripts/generate_eval_manuals.py      # first, so the synthetic manuals exist
     python scripts/download_real_manuals.py
 
-The files are US Department of Energy (DOE) tip sheets, published by a US government agency. They
+The files are US Department of Energy (DOE) tip sheets and a Pacific Northwest National Laboratory
+guide
+for DOE's Federal Energy Management Program, all US government publications. They
 are not stored in git (data/manuals/ is ignored), so this script fetches them and checks each
 SHA-256 against the copy the evaluation was run on. A hash mismatch means the publisher changed
 the file: re-validate the evidence phrases before trusting the numbers.
@@ -19,6 +22,7 @@ DEST = Path(__file__).resolve().parent.parent / "data" / "manuals" / "eval"
 # filename -> (url, sha256)
 DOCUMENTS = {
     "test_pumping_system__pumping_systemts4.pdf": (
+       
         "https://www.energy.gov/sites/prod/files/2014/05/f16/test_pumping_system__pumping_systemts4.pdf",
         "089b5db0afa043dc26ffc7f87492c116b4eb64d81d9587fcb9156a928166afc5",
     ),
@@ -35,8 +39,13 @@ DOCUMENTS = {
         "e77579152b36363516d2284c77c60d1102b2c4b233ee4e3ff60ce6e245d029fd",
     ),
     "extend_motor_operlife_motor_systemts3.pdf": (
+       
         "https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/extend_motor_operlife_motor_systemts3.pdf",
         "ce0dfe769c0be9b511bb9f5f6ceeead1e8f6e56c1bdf40e0752756394fdc6ed4",
+    ),
+    "pnnl_om_best_practices_guide.pdf": (
+        "https://www.pnnl.gov/main/publications/external/technical_reports/PNNL-19634.pdf",
+        "7ed46c10e7736b028199a3ca6ebd987de343f3d9a7a606caa90d62e86ac9bc1e",
     ),
 }
 

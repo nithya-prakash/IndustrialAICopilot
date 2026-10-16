@@ -1,7 +1,7 @@
-"""Loads the synthetic sensor CSVs (data/sensors/*.csv) into Postgres for a
-given tenant — generates them first via generate_sample_sensor_data if
-missing. Idempotent: skips a file whose equipment_id already has readings
-for that tenant.
+"""Loads the real hydraulic test-rig sensor history (data/sensors/hydraulic_001.csv, UCI
+"Condition Monitoring of Hydraulic Systems", CC BY 4.0) into Postgres for a given tenant.
+Downloads and converts it first via download_real_sensor_data if missing. Idempotent: skips a
+file whose equipment_id already has readings for that tenant.
 
     docker compose run --rm backend python scripts/seed_sensor_data.py [tenant_id]
 
@@ -26,9 +26,7 @@ from app.services.sensor_service import bulk_ingest_csv  # noqa: E402
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "sensors"
 
 EQUIPMENT = {
-    "motor_001.csv": ("MOTOR-001", "electric_motor"),
-    "pump_001.csv": ("PUMP-001", "industrial_pump"),
-    "conveyor_001.csv": ("CONVEYOR-001", "conveyor_system"),
+    "hydraulic_001.csv": ("HYDRAULIC-001", "hydraulic_system"),
 }
 
 
@@ -54,16 +52,11 @@ async def _ensure_user(tenant_id: str) -> User:
 
 
 async def main(tenant_id: str) -> None:
-    if not _DATA_DIR.exists() or not any(_DATA_DIR.glob("*.csv")):
-        from scripts.generate_sample_sensor_data import (
-            generate_conveyor_001,
-            generate_motor_001,
-            generate_pump_001,
-        )
+    if not (_DATA_DIR / "hydraulic_001.csv").exists():
+        from scripts.download_real_sensor_data import main as download
 
-        generate_motor_001()
-        generate_pump_001()
-        generate_conveyor_001()
+        if download() != 0:
+            raise SystemExit("could not fetch the hydraulic dataset")
 
     user = await _ensure_user(tenant_id)
 

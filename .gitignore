@@ -11,6 +11,8 @@ htmlcov/
 data/manuals/*
 !data/manuals/.gitkeep
 !data/manuals/electric_motor_manual.pdf
+data/sensors/*
+!data/sensors/.gitkeep
 data/test_images/*
 !data/test_images/.gitkeep
 data/images/*

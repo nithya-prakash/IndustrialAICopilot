@@ -47,3 +47,20 @@ def test_ocr_extracts_readable_text_and_heading(scanned_pdf: Path) -> None:
     heading_blocks = [b for b in blocks if b.block_type == "heading"]
     assert any("Unusual noise" in b.text for b in heading_blocks)
     assert any(b.level == 2 for b in heading_blocks if "Unusual noise" in b.text)
+
+
+def test_only_requested_pages_are_rendered(
+    scanned_pdf: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.ingestion import ocr
+
+    requested: list[tuple[int, int]] = []
+    real = ocr.convert_from_path
+
+    def spy(path, first_page, last_page):
+        requested.append((first_page, last_page))
+        return real(path, first_page=first_page, last_page=last_page)
+
+    monkeypatch.setattr(ocr, "convert_from_path", spy)
+    ocr.ocr_pages(scanned_pdf, [1])
+    assert requested == [(1, 1)]

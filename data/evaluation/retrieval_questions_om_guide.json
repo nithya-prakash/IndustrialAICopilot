@@ -1,0 +1,194 @@
+[
+ {
+  "question": "What share of an average facility's maintenance effort is still reactive?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "more than 55% of maintenance resources"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which maintenance approach is known as the \"run it till it breaks\" mode?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "run it till it breaks"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How much can a preventive maintenance programme save compared with a purely reactive one?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "12% to 18% cost savings over reactive"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Which organisation pioneered preventive maintenance to make its ships more reliable?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Navy pioneered preventive"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What savings does predictive maintenance estimate over a preventive programme?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "8% to 12% cost savings"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What does predictive maintenance base the timing of work on, instead of a calendar?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "preset schedule"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What frequency range do non-contact ultrasonic detectors used for predictive maintenance cover?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "20 to 100 kHz"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What did NASA research say about ultrasonic readings that signal early bearing wear?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "28 to 32 kHz"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which failures can ultrasonic detectors find besides component wear?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "steam trap failures"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What kind of electrical fault shows up as a hot spot on an infrared camera?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "loose or corroded electrical connection"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What wavelength range is the infrared radiation spectrum agreed to cover?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "between 2.0 and 15 microns"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What is peak-to-peak displacement in vibration measurement?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "peak-to-peak displacement"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Can vibration severity charts be used as absolute pass or fail limits for a machine?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "not absolute vibration limits"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How are the many vibration signals from one machine told apart?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "individual vibration signals are separated"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Which motor test finds turn-to-turn insulation problems in windings?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "turn-to-turn and phase-to-phase insulation"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Why is motor current signature analysis attractive for motor-driven equipment?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "non-intrusive method for detecting mechanical and electrical"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Roughly how many kinds of motor tests exist?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "more than 20 different types of motor tests"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Why is motor analysis equipment not as widely used as other predictive tools?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Motor analysis equipment remains fairly expensive"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What are the two most common causes of steam trap failure besides design problems?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "oversizing and dirt"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How does an inverted bucket steam trap usually fail?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "it fails open"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What can one malfunctioning steam trap cost a site each year?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "thousands of dollars in wasted steam"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What symptoms in a boiler room suggest steam traps are failing?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Abnormally warm boiler room"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What fills the bellows in a thermostatic steam trap?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "alcohol mixture"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How does an infrared thermometer differ from an imager?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "do not provide any image"
+  ],
+  "kind": "paraphrase"
+ }
+]

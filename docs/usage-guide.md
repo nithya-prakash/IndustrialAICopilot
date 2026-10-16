@@ -100,20 +100,19 @@ page number, and equipment metadata.
 docker compose run --rm backend python scripts/seed_sensor_data.py acme
 ```
 
-Generates synthetic hourly sensor CSVs (`data/sensors/*.csv`, 14 days) and
-loads them for tenant `acme`. `motor_001` tells a deliberate story tied to
-the sample manual: temperature drifts upward over the last 2 days
-(developing overheating) and vibration gets 5 injected spikes crossing the
-manual's stated 4.5 mm/s guidance. Then, as any user registered in `acme`:
+Downloads the UCI hydraulic test-rig dataset on first use (about 77 MB, checksum-verified, CC BY 4.0), converts
+it to one row per 60 s load cycle (2,205 cycles, 7 sensors) and loads it for tenant `acme` as `HYDRAULIC-001`.
+The data is real but has no wall-clock time, so timestamps are an assumed start (2026-08-09) plus 60 s per cycle.
+Component conditions (cooler, valve, pump leak, accumulator) stay in `data/sensors/hydraulic_001_labels.csv` and are
+used only by `python -m evaluation.sensor_fault_eval`. Then, as any user registered in `acme`:
 
 ```bash
-curl "localhost:8000/api/v1/sensors/MOTOR-001/analysis?metric=temperature&start_time=2026-08-09T00:00:00Z&end_time=2026-08-23T00:00:00Z" \
+curl "localhost:8000/api/v1/sensors/HYDRAULIC-001/analysis?metric=cooling_efficiency&start_time=2026-08-09T00:00:00Z&end_time=2026-08-10T13:00:00Z" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-returns real trend direction/slope, statistical anomalies, threshold
-violations (with the manual citation attached), and baseline comparison —
-all computed from the actual seeded data, not canned.
+returns trend direction/slope, statistical anomalies and baseline comparison —
+all computed from the seeded recordings, not canned. No threshold is applied to these metrics.
 
 ## Try the diagnosis agent
 
@@ -121,8 +120,8 @@ all computed from the actual seeded data, not canned.
 docker compose run --rm backend python scripts/seed_equipment_data.py acme
 ```
 
-Seeds `Equipment` + `MaintenanceTask` rows for MOTOR-001/PUMP-001/CONVEYOR-001
-(some deliberately overdue). Then:
+Seeds `Equipment` + `MaintenanceTask` rows for HYDRAULIC-001 and the illustrative
+MOTOR-001/PUMP-001/CONVEYOR-001 (some deliberately overdue). Then:
 
 ```bash
 curl -X POST localhost:8000/api/v1/copilot/query \

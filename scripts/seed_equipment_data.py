@@ -1,5 +1,7 @@
 """Seeds Equipment + MaintenanceTask rows for the demo equipment used
-throughout this project's sample data (MOTOR-001, PUMP-001, CONVEYOR-001) —
+throughout this project's sample data (HYDRAULIC-001 has real sensor data; MOTOR-001, PUMP-001 and
+CONVEYOR-001 are
+illustrative maintenance schedules only) —
 so the get_maintenance_schedule tool has something real to query.
 
     docker compose run --rm backend python scripts/seed_equipment_data.py [tenant_id]
@@ -24,6 +26,16 @@ from app.services.equipment_service import (  # noqa: E402
 NOW = datetime.now(UTC)
 
 EQUIPMENT = [
+    {
+        "equipment_id": "HYDRAULIC-001",
+        "equipment_type": "hydraulic_system",
+        "name": "Hydraulic test rig",
+        "tasks": [
+            {"task_name": "Cooler inspection", "interval_days": 90, "days_since": 100},  # overdue
+            {"task_name": "Accumulator pre-charge check", "interval_days": 180, "days_since": 60},
+            {"task_name": "Oil filter replacement", "interval_days": 120, "days_since": 30},
+        ],
+    },
     {
         "equipment_id": "MOTOR-001",
         "equipment_type": "electric_motor",

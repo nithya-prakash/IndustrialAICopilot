@@ -15,6 +15,11 @@ DEFAULT_UNITS = {
     "vibration_rms": "mm/s",
     "rpm": "rpm",
     "pressure": "bar",
+    "flow_rate": "l/min",
+    "vibration": "mm/s",
+    "motor_power": "W",
+    "cooling_efficiency": "%",
+    "efficiency_factor": "%",
 }
 
 # Only vibration_rms has a fixed threshold here, because it's the one metric

@@ -13,7 +13,7 @@ high-severity results are held for a supervisor to approve.
 *Recorded against the local stack with a real model (Groq `gpt-oss-20b`); the [older recording](docs/images/supervisor-demo.gif) shows a low-confidence result being held and rejected.*
 
 **Status: v1.0, evaluation work in progress.** Known gaps are listed under Limitations: no permanent hosted instance,
-small evaluation sets (a real-document set was added 2026-10-13), and untested Gemini/OpenAI and vLLM paths.
+small evaluation sets (real-document sets added 2026-10-13 and 2026-10-16), and untested Gemini/OpenAI and vLLM paths.
 The PDF extractor now reads multi-column pages column by column ([before/after](docs/real-document-evaluation.md)).
 
 ## Why
@@ -26,9 +26,11 @@ makes is checked against what it actually retrieved, and anything uncertain goes
 
 | Metric | Result | Dataset and method |
 |---|---|---|
-| Retrieval MRR (recall@1) | BM25 0.948 (0.925), dense 0.855 (0.792), hybrid 0.962 (0.943), hybrid + rerank 0.969 (0.962) | 53 labelled questions; index = 4 manuals (3 synthetic) plus 5 real DOE tip sheets, 111 chunks, re-run 2026-10-13 after the column fix (on the original 44-chunk index: 0.939 / 0.903 / 0.953 / 0.969), `python -m evaluation.retrieval_ablation` |
-| Retrieval, paraphrased questions | MRR: BM25 0.594, dense 0.748, hybrid 0.672, hybrid + rerank 0.670 with the -4.0 relevance floor (recall@5 0.68); the 0.847 without the floor was measured on the original 44-chunk index and not re-run | 50 questions written to share few words with the manual, same 111-chunk index, `python -m evaluation.retrieval_ablation data/evaluation/retrieval_questions_paraphrase.json` |
-| Retrieval on real documents | MRR / recall@1: BM25 0.882 / 0.825, dense 0.719 / 0.571, hybrid 0.830 / 0.714, hybrid + rerank **0.952 / 0.937** (before the column fix: 0.881 / 0.857 for hybrid + rerank) | 63 questions anchored to evidence phrases in 5 real, two-column DOE tip sheets (about 6,200 words, 67 chunks). Written by me, not independent. [Details](docs/real-document-evaluation.md) |
+| Retrieval MRR (recall@1) | BM25 0.887 (0.849), dense 0.771 (0.717), hybrid 0.863 (0.792), hybrid + rerank 0.959 (0.943) | 53 labelled questions; index = 4 manuals (3 synthetic) plus 6 real documents, 1,204 chunks, re-run 2026-10-16 (on the 111-chunk index of 2026-10-13: 0.948 / 0.855 / 0.962 / 0.969; on the original 44-chunk index: 0.939 / 0.903 / 0.953 / 0.969), `python -m evaluation.retrieval_ablation` |
+| Retrieval, paraphrased questions | MRR: BM25 0.442, dense 0.676, hybrid 0.612, hybrid + rerank 0.633 with the -4.0 relevance floor (recall@5 0.68; was 0.670 on the 111-chunk index) | 50 questions written to share few words with the manual, same 1,204-chunk index, `python -m evaluation.retrieval_ablation data/evaluation/retrieval_questions_paraphrase.json` |
+| Retrieval on real documents | MRR / recall@1: BM25 0.796 / 0.730, dense 0.581 / 0.429, hybrid 0.755 / 0.635, hybrid + rerank **0.944 / 0.921** (0.952 / 0.937 on the 111-chunk index, before the publisher-boilerplate filter and with 1,100 fewer distractor chunks) | 63 questions anchored to evidence phrases in 5 real, two-column DOE tip sheets, now searched among 1,204 chunks. Written by me, not independent. [Details](docs/real-document-evaluation.md) |
+| Retrieval on a 321-page real guide | MRR / recall@1: BM25 0.809 / 0.750, dense 0.703 / 0.542, hybrid **0.896 / 0.833**, hybrid + rerank 0.861 / 0.750 (recall@3 1.00 with rerank) | 24 questions anchored to evidence phrases in the PNNL/DOE O&M Best Practices Guide (321 pages, 16 scanned pages OCR-ed), same index; here the reranker did not help. Written by me, so not independent |
+| Sensor fault detection on real data | AUROC with all 7 sensors together (Mahalanobis, 95% CI): cooler 1.000 [1.000, 1.000], pump leak 0.998 [0.996, 0.999], valve **0.840** [0.819, 0.857], accumulator **0.738** [0.706, 0.770]; best single metric with the z-score check the sensor tools use: 1.000 / 0.985 / 0.600 / 0.630 | UCI hydraulic test rig, 2,205 real 60 s cycles, healthy half used as baseline, other 3 components vary freely, `python -m evaluation.sensor_fault_eval` |
 | RAGAS faithfulness / context precision | 1.00 / 0.91 | 7 questions on the sample manual; judge: local `qwen2.5:7b` |
 | Answer quality, tool-loop agent | fact coverage 0.91, citation precision 0.91, overconfident on 2/8 unanswerable questions, unsupported numbers in 1/24 answers | 24 questions (16 answerable, 8 not) on the sample manual, Groq `gpt-oss-20b`, deterministic scoring (`python -m evaluation.answer_eval`); relevance cut-off -4.0 at the time; without it, overconfident on 3/3 unanswerable questions (a different model, `gpt-oss-120b`). The cut-off is now a conservative -4.0 floor (see the engineering benchmarks); re-run pending |
 | Diagnosis latency, supervisor graph | 8.5 s on Groq `gpt-oss-120b`; about 155 s on local `qwen2.5:7b` | one question, same manual |
@@ -121,6 +123,15 @@ RAGAS, Langfuse, llm-guard, MCP, Prometheus, Grafana, Locust, Docker Compose, Gi
 
 Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.md).
 
+## Data sources
+
+- Sensor history: [Condition monitoring of hydraulic systems](https://doi.org/10.24432/C5CW21), Helwig, Pignanelli and
+  Schütze (ZeMA gGmbH / Saarland University), UCI Machine Learning Repository, CC BY 4.0. Download and conversion:
+  `scripts/download_real_sensor_data.py` (checksum-verified; outputs are not stored in git).
+- Manuals: US Department of Energy tip sheets and the PNNL "Operations & Maintenance Best Practices Guide, Release 3.0"
+  (PNNL-19634), US government publications fetched by `scripts/download_real_manuals.py`. The sample motor manual and
+  three evaluation manuals are synthetic and generated by scripts in `scripts/`.
+
 ## Limitations
 
 - The Anthropic path is covered by mocked tests only (no credits). Live runs used Groq `gpt-oss-120b` and local Ollama
@@ -134,8 +145,15 @@ Sample request and a real response: [`docs/sample-input.md`](docs/sample-input.m
   and a 7B model judged a 7B model in the RAGAS run. The real-document set (63 questions) was written by me from the
   documents' own text.
 - Column handling covers vertical gutters only: a sidebar or two-column body is read column by column, but tables, text
-  boxes and figures are not modelled. On the five real DOE tip sheets, contact and program boilerplate is still indexed
-  and a few chunks carry labels such as `PLEASE CONTACT:`.
+  boxes and figures are not modelled. The closing "About DOE" and "PLEASE CONTACT" panels of the DOE tip sheets are
+  dropped by a pattern list written for these publishers, so other publishers' boilerplate is still indexed. Link lists
+  under "Resources" headings are still indexed. In the 321-page guide, table cells become many one- or two-character
+  "headings" and two-column text can interleave (one planned evidence phrase could not be found in any chunk).
+- Sensor data is real but small in scope: one hydraulic rig, per-cycle means (no raw waveforms), timestamps assumed
+  (the dataset has no clock), and valve and accumulator faults are only weakly detectable with these checks (AUROC
+  0.84 and 0.74 at best). The cooler result of 1.000 likely benefits from how the rig was run; treat it as an upper
+  bound, not a field figure. The agent's sensor threshold (4.5 mm/s) still comes from the synthetic sample manual and
+  does not apply to the hydraulic rig, so no threshold is applied to its metrics.
 - Sensor findings are checked against retrieved sensor data and dropped on mismatch; the model's other free text is not.
   A small local vision model gave shallow image observations.
 - Incident memory was checked on one live scenario and embeds up to the 200 most recent approved incidents per workspace

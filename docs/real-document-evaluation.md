@@ -82,3 +82,40 @@ after the fix; dense-only 0.903, 0.864, 0.855. The 50 paraphrased questions: rer
 - Retrieval only. No generation or abstention was measured on these documents.
 - Not fixed: repeated boilerplate (contact details, program blurbs) is still chunked and indexed; tables, text boxes
   and figure text are not modelled; a few chunks keep labels such as `PLEASE CONTACT:`.
+
+## Update 2026-10-16: a 321-page guide, boilerplate removal, a larger index
+
+Three changes, measured together because they share one index:
+
+- The PNNL/DOE *Operations & Maintenance Best Practices Guide, Release 3.0* (321 pages) was added to the evaluation
+  index (`scripts/download_real_manuals.py`, SHA-256 checked). The index grew from 111 to 1,204 chunks.
+- `_drop_publisher_boilerplate` removes each page's closing "About DOE", "PLEASE CONTACT" and report-number panel.
+- Indexing the guide exposed two defects, both fixed: `ocr_pages` rendered every page between the first and last
+  scanned page at once (pages 4 to 321, over 4.5 GB, killed by the OS), and the extractor kept every parsed character
+  of every page in memory. OCR now renders one scanned page at a time (16 pages, 7 s, under 900 MB).
+
+New question set `data/evaluation/retrieval_questions_om_guide.json`: 24 questions (12 direct, 12 paraphrased)
+anchored to evidence phrases. The phrases were checked to exist in the extracted chunks before any retrieval run;
+one was replaced because the original sat across interleaved columns and matched no chunk. No question was changed
+after seeing results.
+
+| Configuration | MRR | Recall@1 | Recall@3 |
+|---|---|---|---|
+| BM25 only | 0.809 | 0.750 | 0.875 |
+| Dense only | 0.703 | 0.542 | 0.875 |
+| Dense + BM25 + RRF | **0.896** | **0.833** | 0.958 |
+| Dense + BM25 + RRF + reranker | 0.861 | 0.750 | **1.000** |
+
+The reranker finds the passage in the top three every time but puts it first less often than plain hybrid fusion.
+With 24 questions, one question is 4 points of recall, so the 0.035 MRR gap between hybrid and reranked is within noise.
+
+The earlier sets re-run on the 1,204-chunk index (reranked MRR / recall@1):
+
+| Set | 111 chunks | 1,204 chunks |
+|---|---|---|
+| 53 questions (main) | 0.969 / 0.962 | 0.959 / 0.943 |
+| 50 paraphrased | 0.670 / n.r. | 0.633 / 0.600 |
+| 63 real DOE questions | 0.952 / 0.937 | 0.944 / 0.921 |
+
+Small drops are what a 10x larger index should cause, but the boilerplate filter changed the DOE chunks at the same
+time, so the two effects are not separated.
