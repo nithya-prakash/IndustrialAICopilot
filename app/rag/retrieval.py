@@ -17,6 +17,7 @@ from app.rag.bm25 import bm25_search_cached
 from app.rag.embeddings import embed_texts
 from app.rag.fusion import reciprocal_rank_fusion
 from app.rag.qdrant_store import search as qdrant_dense_search
+from app.rag.query_expansion import expand_query
 from app.rag.reranker import rerank
 
 
@@ -150,7 +151,8 @@ async def hybrid_search(
     # fixed during the Fix Pass evaluation; see the ADR entry).
     chunk_id_by_point_id = {row.qdrant_point_id: str(row.id) for row in rows if row.qdrant_point_id}
 
-    query_vector = embed_texts([query])[0]
+    expansion = await expand_query(query)
+    query_vector = embed_texts([f"{query}\n{expansion}" if expansion else query])[0]
     dense_results = qdrant_dense_search(
         query_vector,
         top_k=settings.dense_top_k,

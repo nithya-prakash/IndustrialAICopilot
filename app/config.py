@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     bm25_top_k: int = 20
     rrf_k: int = 60
     rerank_top_k: int = 5
+    # "hyde": the LLM writes a short hypothetical answer passage that is added to the dense query
+    # (app/rag/query_expansion.py). Off by default: one extra LLM call per search.
+    query_expansion: str = "off"
+    query_expansion_timeout_seconds: float = 20.0
     # Cross-encoder logits are unbounded (not a [0,1] probability) and their range depends on the
     # model, so the right cut-off must be read off the score distribution of RERANK_MODEL.
     # A very permissive floor that only drops passages the cross-encoder scores as clearly

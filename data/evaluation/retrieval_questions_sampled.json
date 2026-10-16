@@ -1,0 +1,194 @@
+[
+ {
+  "question": "What share of the electric energy used in US manufacturing goes to motor systems?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "about 70% of all the electric energy"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Why does a full-coverage service contract make the contractor keep up preventive maintenance?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "perform rigorous preventive maintenance on schedule"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What can DOE's pumping system assessment tool help you work out?",
+  "source_file": "test_pumping_system__pumping_systemts4.pdf",
+  "evidence": [
+   "can help you assess pumping system efficiency"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What are drift eliminators for in a cooling tower?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Devices called drift eliminators"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What three machine conditions does oil analysis look at?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Oil analysis is used to define three basic machine conditions"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Why still test a boiler by hand if it already has an oxygen trim control?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "handheld combustion analyzers"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What can the MotorMaster+ software calculate for an energy programme?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Capability to calculate energy savings, dollar savings"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How is a squirrel-cage rotor built?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "squirrel-cage rotor consists of thick conducting bars"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "What does an ultrasonic test of a failed inverted bucket steam trap sound like?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "a failed trap sinks, producing a continuous flow noise"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Besides saving energy, what do variable speed drives do for pumps?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Improved process control because VSDs can correct small variations in flow"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What fraction of motor failures involve bearings?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "Bearing failures account for nearly two-thirds of all motor failures"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Does moving to a higher insulation class when rewinding a motor extend winding life?",
+  "source_file": "extend_motor_operlife_motor_systemts3.pdf",
+  "evidence": [
+   "does increase the winding life"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How does a vibration analyzer show that a motor's condition has changed?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "the analyst can discern the vibration amplitude of the point on the motor"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What mistakes do organisations make when introducing a computerized maintenance management system?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Improper selection of a CMMS vendor"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How much more do equipment retrofits cost than low-cost operating and maintenance measures for the same savings?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "retrofits cost approximately 20-times more than low-cost O&M measures"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What should be checked on a chiller's electrical connections during maintenance?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Check all electrical connections/ terminals for contact and tightness"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How do inlet guide vanes change fan flow?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Inlet guide vanes: create swirls"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "Why is the expansion of a water-filled bellows trap almost the same as steam pressure rises?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "pressure inside and outside the bellows is nearly balanced"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What do most pump maintenance activities concentrate on?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "checking packing and mechanical seals for leakage"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What must be ensured when putting boiler burners back after cleaning?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "burner with pilot bracket is replaced in its original position"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "How does roof reconditioning cost compare with replacing the roof?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "less than half of new roof cost per square foot"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "What did FEMP suggest GSA do with its chilled water plant to cut peak demand?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "chilled water plant very early in the morning"
+  ],
+  "kind": "paraphrase"
+ },
+ {
+  "question": "Under what conditions is a lighting retrofit not the best option?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "Retrofit may not be the best solution if"
+  ],
+  "kind": "direct"
+ },
+ {
+  "question": "How much can a light-coloured room raise light levels compared with a dark one?",
+  "source_file": "pnnl_om_best_practices_guide.pdf",
+  "evidence": [
+   "A light colored room can increase light levels as much as 20%"
+  ],
+  "kind": "direct"
+ }
+]
