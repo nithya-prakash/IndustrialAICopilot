@@ -72,14 +72,18 @@ def main() -> int:
     if not (DATA / "hydraulic_001.csv").exists():
         print("run scripts/download_real_sensor_data.py first", file=sys.stderr)
         return 1
+    compact = "--compact" in sys.argv
     metrics, values, labels = _load()
     rng = np.random.default_rng(SEED)
 
-    print(
-        "| Component | Best single metric | AUROC [95% CI] | Mahalanobis, all metrics "
-        "| Test cycles (degraded / healthy) | Each metric |"
-    )
-    print("|---|---|---|---|---|---|")
+    if compact:
+        print(f"{'component':<22}{'best single sensor':<28}{'all 7 sensors':<18}test cycles")
+    else:
+        print(
+            "| Component | Best single metric | AUROC [95% CI] | Mahalanobis, all metrics "
+            "| Test cycles (degraded / healthy) | Each metric |"
+        )
+        print("|---|---|---|---|---|---|")
     for component, optimal in COMPONENTS.items():
         healthy = np.flatnonzero(labels[component] == optimal)
         degraded = np.flatnonzero(labels[component] != optimal)
@@ -103,6 +107,13 @@ def main() -> int:
         maha_auc = roc_auc_score(y, maha)
         maha_low, maha_high = _bootstrap_ci(y, maha, rng)
         everything = ", ".join(f"{m} {results[m][0]:.2f}" for m in metrics)
+        if compact:
+            single = f"{best} {auc:.2f}"
+            print(
+                f"{component:<22}{single:<28}{maha_auc:<18.2f}"
+                f"{len(degraded)} / {len(healthy_test)}"
+            )
+            continue
         print(
             f"| {component} | {best} | {auc:.3f} [{low:.3f}, {high:.3f}] "
             f"| {maha_auc:.3f} [{maha_low:.3f}, {maha_high:.3f}] "

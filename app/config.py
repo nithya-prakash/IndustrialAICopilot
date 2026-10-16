@@ -105,13 +105,16 @@ class Settings(BaseSettings):
     rerank_top_k: int = 5
     # Cross-encoder logits are unbounded (not a [0,1] probability) and their range depends on the
     # model, so the right cut-off must be read off the score distribution of RERANK_MODEL.
-    # A conservative floor, NOT a validated threshold. Every answerable question in
-    # data/evaluation/answer_eval.json had a best passage scoring >= -3.6, so -4.0 avoids blocking
-    # relevant evidence; it blocks only clearly unrelated passages. Tuning on 17 questions and
-    # checking on 7 held-out ones (python -m evaluation.calibrate_cutoff) showed no cut-off
-    # separates answerable from unanswerable questions reliably with this reranker and corpus
-    # (balanced accuracy 0.4 to 0.65 on held-out), and a tighter cut-off blocked a realistic query.
-    min_relevance_score: float = -4.0
+    # A very permissive floor that only drops passages the cross-encoder scores as clearly
+    # unrelated. It was -4.0 until 2026-10-16: on 50 paraphrased questions that floor removed
+    # every copy of the right passage for 14 of them (MRR 0.633 with it, 0.732 without;
+    # unchanged on the other three sets). Tuning a cut-off on 17 questions and checking on 7
+    # held-out ones (python -m evaluation.calibrate_cutoff) showed no cut-off separates
+    # answerable from unanswerable questions reliably with this reranker and corpus (balanced
+    # accuracy 0.4 to 0.65 on held-out), so the floor is not an abstention mechanism. Given up:
+    # unanswerable questions now more often reach the model with weakly related passages;
+    # answer-level abstention was not re-measured after the change.
+    min_relevance_score: float = -10.0
 
     confidence_approval_threshold: float = 0.75
     diagnosis_timeout_seconds: int = 5

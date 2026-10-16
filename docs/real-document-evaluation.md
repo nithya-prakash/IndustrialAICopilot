@@ -114,8 +114,35 @@ The earlier sets re-run on the 1,204-chunk index (reranked MRR / recall@1):
 | Set | 111 chunks | 1,204 chunks |
 |---|---|---|
 | 53 questions (main) | 0.969 / 0.962 | 0.959 / 0.943 |
-| 50 paraphrased | 0.670 / n.r. | 0.633 / 0.600 |
-| 63 real DOE questions | 0.952 / 0.937 | 0.944 / 0.921 |
+| 50 paraphrased | 0.670 / n.r. | 0.633 / 0.600 (0.730 / 0.660 after the floor change below) |
+| 63 real DOE questions | 0.952 / 0.937 | 0.944 / 0.921 (0.950 / 0.921 after the floor change below) |
 
 Small drops are what a 10x larger index should cause, but the boilerplate filter changed the DOE chunks at the same
 time, so the two effects are not separated.
+
+## Update 2026-10-16: relevance floor lowered from -4.0 to -10.0
+
+Why the paraphrase score was low: in 48 of 50 paraphrased questions the right passage was already among the fused
+candidates, but the reranker scored it below -4.0 for 14 of them, so the floor removed it entirely. The ranking was
+not the main problem; the cut-off was. Variants tried on the same index (MRR, paraphrased set / 24-question guide set /
+63 real DOE set / 53 main set), with the original reranker and the floor off unless stated:
+
+| Variant | Paraphrased | Guide | Real DOE | Main |
+|---|---|---|---|---|
+| Old floor (-4.0) | 0.633 | 0.861 | 0.944 | 0.959 |
+| No floor | 0.732 | 0.861 | 0.950 | 0.959 |
+| Section heading prepended for the reranker | 0.740 | 0.840 | 0.952 | 0.981 |
+| RRF of reranker, dense and BM25 ranks | 0.634 | 0.900 | 0.807 | 0.906 |
+| Reranker blended with dense score (0.5 / 0.5) | 0.766 | 0.859 | 0.804 | 0.892 |
+
+Blending gave the best paraphrase score but cost 0.14 MRR on the real documents, so it was not adopted. Removing the
+floor never lost more than 0.006 MRR on any set and was the only change that helped without hurting. Shipped value:
+-10.0, which keeps the right passage in 92% of paraphrased questions (versus 68% at -4.0). Measured with it:
+paraphrased 0.730, real DOE 0.950, main 0.959, guide 0.861.
+
+`BAAI/bge-reranker-base` (1.1 GB) was also tried. It finished only the paraphrased set in about 35 minutes of CPU time
+(MRR 0.705, below the original reranker with the floor removed) and was stopped.
+
+The cost: with this reranker no cut-off separated answerable from unanswerable questions reliably (see the cut-off
+benchmark in the README), so lowering the floor trades some unanswerable-question blocking for recall. Answer-level
+abstention was not re-run.
